@@ -77,6 +77,12 @@ canvas {
     padding: 10px;
     margin-bottom: 10px;
     font-size: 12px;
+    transition: all 0.2s;
+}
+.saved-item-active {
+    border-color: #0ff;
+    background: rgba(0, 255, 255, 0.08);
+    box-shadow: 0 0 12px rgba(0, 255, 255, 0.25), inset 0 0 8px rgba(0, 255, 255, 0.05);
 }
 .saved-item-title {
     color: #fff;
@@ -110,12 +116,14 @@ canvas {
     z-index: 10;
     pointer-events: none; 
     background: rgba(5, 5, 10, 0.7);
-    padding: 25px;
+    padding: 20px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-left: 4px solid #0ff;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
     width: 320px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
 }
 
 h1 {
@@ -156,4 +164,9 @@ h1 {
 }
 .controls-hint strong {
     color: #0ff;
+}
+
+#ui input[type="range"] {
+    pointer-events: auto;
+    cursor: pointer;
 }
