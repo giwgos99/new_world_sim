@@ -33,13 +33,25 @@
             
             Emergent Events: <span id="event-count">0</span><br>
             Active Bonds: <span id="bond-count">0</span><br>
-            Void Age: <span id="void-age">0</span>
+            Void Age: <span id="void-age">0</span><br>
+            Projection: dims <span id="proj-dims" class="highlight-cyan">0,1,2</span>
+        </div>
+        <div style="margin: 8px 0; padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; gap: 12px;">
+                <div style="flex: 1;">
+                    <label style="font-size: 10px; color: #888;">SPEED: <span id="speed-label" class="highlight-cyan">1</span>x</label>
+                    <input type="range" id="speed-slider" min="1" max="10" value="1" style="width: 100%; accent-color: #0ff;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 10px; color: #888;">BONDS: <span id="lines-label" class="highlight-cyan">20</span></label>
+                    <input type="range" id="lines-slider" min="0" max="100" value="20" style="width: 100%; accent-color: #f0f;">
+                </div>
+            </div>
         </div>
         <div class="controls-hint">
             <strong>CLICK CANVAS TO LOCK MOUSE</strong><br>
-            W A S D - Move | Q / E - Down / Up<br>
-            ESC - Unlock Mouse<br>
-            <button id="btn-reset-cam" class="btn" style="margin-top: 10px; width: 100%; padding: 5px;">RESET CAMERA</button>
+            WASD - Move | Q/E - Down/Up | ESC - Unlock<br>
+            <button id="btn-reset-cam" class="btn" style="margin-top: 8px; width: 100%; padding: 4px;">RESET CAMERA</button>
         </div>
     </div>
     
