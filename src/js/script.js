@@ -194,21 +194,26 @@ class VoidEngine {
             }
         }
 
-        // 3. God System Evaluation (The Edge of Chaos) — v0.4 Overhauled
+        // 3. God System Evaluation (The Edge of Chaos) — v0.5 Ultimate Filter
         if (!this.isStable) {
-            if (this.age > 500) { // Extended evaluation window (was 250)
+            if (this.age === 400 || this.age === 500) {
                 
-                // --- BOND COUNT ---
+                // --- BOND COUNT & NETWORK TOPOLOGY ---
                 let strongBonds = 0;
+                let maxDegree = 0;
                 for (let ent of this.entities) {
+                    let degree = 0;
                     for (let partner in ent.bonds) {
-                        if (ent.bonds[partner] > this.bondCap * 0.8) strongBonds++;
+                        if (ent.bonds[partner] > this.bondCap * 0.8) {
+                            strongBonds++;
+                            degree++;
+                        }
                     }
+                    if (degree > maxDegree) maxDegree = degree;
                 }
                 strongBonds = Math.floor(strongBonds / 2);
 
-                // --- MULTI-DIMENSIONAL VARIANCE (v0.4) ---
-                // Check variance across ALL dimensions
+                // --- MULTI-DIMENSIONAL VARIANCE ---
                 let diverseDims = 0;
                 let totalVariance = 0;
                 for (let d = 0; d < this.D; d++) {
@@ -219,42 +224,62 @@ class VoidEngine {
                     for (let ent of this.entities) dimVar += Math.pow(ent.states[d] - avg, 2);
                     dimVar /= this.entities.length;
                     totalVariance += dimVar;
-                    if (dimVar > 0.08) diverseDims++; // Increased from 0.05
+                    if (dimVar > 0.1) diverseDims++; 
                 }
                 let avgVariance = totalVariance / this.D;
 
-                // --- SPATIAL DISTRIBUTION CHECK (v0.4) ---
-                // Measure spread along ALL dimensions (not just visual)
+                // --- SPATIAL DISTRIBUTION CHECK ---
                 let spreadAxes = 0;
-                let spreads = [];
                 for (let d = 0; d < this.D; d++) {
                     let minV = Infinity, maxV = -Infinity;
                     for (let ent of this.entities) {
                         if (ent.states[d] < minV) minV = ent.states[d];
                         if (ent.states[d] > maxV) maxV = ent.states[d];
                     }
-                    let range = maxV - minV;
-                    spreads.push(range);
-                    if (range > 0.5) spreadAxes++; // Increased spread requirement
+                    if ((maxV - minV) > 0.5) spreadAxes++; 
                 }
 
-                // --- DYNAMIC ACTIVITY CHECK ---
-                // Are things actually moving, or just frozen in place?
-                let isFrozen = this.events.length < (this.entities.length * 0.01);
+                if (isNaN(avgVariance)) return "DEAD";
 
-                // --- THE VERDICT ---
-                let minAllowedBonds = this.entities.length * 0.02; // 2% of population
-                let maxAllowedBonds = this.entities.length * 0.4;  // 40% of population
-                let isDead_bonds = (strongBonds < minAllowedBonds || strongBonds > maxAllowedBonds); 
-                let isDead_variance = (diverseDims < Math.floor(this.D * 0.6) || avgVariance < 0.05); // Require 60% of dims to be active
-                let isDead_singularity = (spreadAxes < 3); // Must be at least a 3D structure (kills lines and planes)
-                let isDead_nan = isNaN(avgVariance);
-                
-                if (isDead_bonds || isDead_variance || isDead_singularity || isDead_nan || isFrozen) {
-                    return "DEAD"; 
-                } else {
+                // Snapshots for Time-Based check
+                if (this.age === 400) {
+                    this.history_variance = avgVariance;
+                    this.history_bonds = strongBonds;
+                    return null; // Keep waiting
+                }
+
+                if (this.age === 500) {
+                    // Compare 500 vs 400
+                    let varianceDelta = Math.abs(avgVariance - this.history_variance);
+                    let bondsDelta = Math.abs(strongBonds - this.history_bonds);
+
+                    // --- THE VERDICT (v0.5 - The Ultimate Filter) ---
+                    
+                    // 1. Crystal Check (Frozen)
+                    if (varianceDelta < 0.001 && bondsDelta < 2) return "DEAD"; 
+                    
+                    // 2. Gas Check (Chaotic Noise)
+                    if (varianceDelta > 0.5) return "DEAD"; 
+                    
+                    // 3. Network Volume Check
+                    let minAllowedBonds = this.entities.length * 0.01; 
+                    let maxAllowedBonds = this.entities.length * 0.5;  
+                    if (strongBonds < minAllowedBonds || strongBonds > maxAllowedBonds) return "DEAD";
+                    
+                    // 4. Scale-Free / Complexity Check
+                    // If the most connected particle has fewer than 3 bonds, it's just strings/pairs
+                    // If it has > 25% of all bonds, it's a monolithic black hole
+                    if (maxDegree < 3 || maxDegree > this.entities.length * 0.25) return "DEAD";
+
+                    // 5. Dimensionality Check
+                    if (diverseDims < Math.floor(this.D * 0.6) || avgVariance < 0.05) return "DEAD"; 
+                    if (spreadAxes < 3) return "DEAD"; 
+                    
                     this.isStable = true;
                 }
+            } else if (this.age > 500) {
+                // If it wasn't stable by 500, kill it (shouldn't reach here if verdict worked)
+                if (!this.isStable) return "DEAD";
             }
         }
 
