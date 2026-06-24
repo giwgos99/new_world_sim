@@ -11,6 +11,11 @@
 - **The "Edge of Chaos" Filter**: The God System now aggressively evaluates the number of active strong bonds after 400 frames. Wipes the universe if it acts like a random gas (<20 bonds) or a frozen crystal (>800 bonds).
 - **Auto-Save Archive Sidebar**: Stable universes are automatically saved to `localStorage` and displayed in a sidebar UI. Saved configs include the Dimension count and the specific Universal Constants. Users can manually load and delete these saved architectures.
 
+- **AST Math Generator (V3)**: The engine now completely writes its own Abstract Syntax Trees for physics rules, compiling raw math strings into native JS functions dynamically.
+- **Continuous Autonomous Mining Loop**: The God System no longer stops when it finds life. It instantly archives the AST laws and resets the universe to keep mining infinitely.
+- **The Singularity Filter (Variance Check)**: Added a state-space variance check to accurately detect and wipe universes that collapse into perfectly identical states (white glowing balls).
+- **Camera Reset Button**: Added a UI button to instantly snap the WebGL free-camera back to origin [0, 0, 20].
+
 ### Removed
 - **Box2D / Matter.js Physics Engine**: Completely removed spatial Euclidean collision and gravity rules.
-- **Single-Rule Architecture**: Removed the logic that forced only one interaction rule per universe. All rules now apply simultaneously based on particle states.
+- **Hardcoded Laws of Physics**: Completely removed all human-written interaction equations (Harmonic Resonance, Dimensional Mirroring, etc.) to achieve 100% generative purity.

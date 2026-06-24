@@ -10,7 +10,7 @@
     <!-- Sidebar for Archive -->
     <div id="sidebar">
         <h2>Void Archive</h2>
-        <div class="sidebar-info">Stable universes auto-save here.</div>
+        <div class="sidebar-info">Stable AST universes auto-save here.</div>
         <button id="btn-save" class="btn">MANUAL SAVE VOID</button>
         <div id="saved-list">
             <!-- Saved items will appear here -->
@@ -25,9 +25,9 @@
         <div id="info">
             Dimensions (D): <span id="dim-count" class="highlight-cyan">-</span><br>
             <br>
-            <strong>Physics Laws for this Void:</strong>
-            <div id="active-rules-container" style="margin: 5px 0 15px 0; padding-left: 10px; border-left: 2px solid #555; font-size: 11px;">
-                <!-- Rules injected here -->
+            <strong>Generated AST Math:</strong>
+            <div id="active-rules-container" style="margin: 5px 0 15px 0; padding-left: 10px; border-left: 2px solid #555; font-size: 10px; overflow-wrap: break-word; max-height: 250px; overflow-y: auto;">
+                <!-- AST Strings injected here -->
             </div>
             
             Emergent Events: <span id="event-count">0</span><br>
@@ -37,7 +37,8 @@
         <div class="controls-hint">
             <strong>CLICK CANVAS TO LOCK MOUSE</strong><br>
             W A S D - Move | Q / E - Down / Up<br>
-            ESC - Unlock Mouse
+            ESC - Unlock Mouse<br>
+            <button id="btn-reset-cam" class="btn" style="margin-top: 10px; width: 100%; padding: 5px;">RESET CAMERA</button>
         </div>
     </div>
     
