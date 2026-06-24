@@ -262,6 +262,7 @@ function startUniverse(config = null) {
     for (let l of activeLines) {
         scene.remove(l);
         l.geometry.dispose();
+        if (l.material) l.material.dispose();
     }
     activeLines = [];
     autoSaved = false;
@@ -391,7 +392,11 @@ function animate() {
     // 5. Render Events
     for(let line of activeLines) {
         line.material.opacity -= 0.05;
-        if(line.material.opacity <= 0) scene.remove(line);
+        if(line.material.opacity <= 0) {
+            scene.remove(line);
+            line.geometry.dispose();
+            line.material.dispose();
+        }
     }
     activeLines = activeLines.filter(l => l.material.opacity > 0);
 
