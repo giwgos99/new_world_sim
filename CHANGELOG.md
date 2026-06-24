@@ -15,6 +15,8 @@
 - **Continuous Autonomous Mining Loop**: The God System no longer stops when it finds life. It instantly archives the AST laws and resets the universe to keep mining infinitely.
 - **The Singularity Filter (Variance Check)**: Added a state-space variance check to accurately detect and wipe universes that collapse into perfectly identical states (white glowing balls).
 - **Camera Reset Button**: Added a UI button to instantly snap the WebGL free-camera back to origin [0, 0, 20].
+- **Observer Mode**: Loading a saved universe now pauses the auto-restart loop, allowing infinite observation of stable universes without them being prematurely wiped.
+- **Resume Auto-Miner Button**: Added a button to the sidebar to easily exit Observer Mode, wipe the screen, and immediately resume autonomous testing of new random equations.
 
 ### Removed
 - **Box2D / Matter.js Physics Engine**: Completely removed spatial Euclidean collision and gravity rules.
