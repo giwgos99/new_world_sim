@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project New World | Observatory</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Fira+Code&display=swap" rel="stylesheet">
+    <!-- Include Three.js for 3D UI Enhancements -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0a0c10;
+            --bg-panel: rgba(20, 24, 32, 0.85);
+            --accent: #00e5ff;
+            --accent-hover: #00b3cc;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --border: #1e293b;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050608; /* Fallback */
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+            overflow: hidden; 
+        }
+
+        /* LEFT PANEL: The Observatory */
+        #left-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 8vh 20px 40px 20px;
+            position: relative;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+
+        /* THE CONTAINMENT UNIT */
+        .canvas-container {
+            background: #000;
+            border-radius: 12px;
+            padding: 4px;
+            box-shadow: 0 0 40px rgba(0, 229, 255, 0.05), inset 0 0 20px rgba(255,255,255,0.02);
+            border: 1px solid rgba(0, 229, 255, 0.15);
+            display: flex;
+        }
+
+        #universe-canvas {
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1 / 1;
+            height: auto;
+            background-color: #000;
+            border-radius: 8px;
+            display: block;
+        }
+
+        /* CONTROLS DASHBOARD */
+        .controls {
+            margin-top: 30px;
+            background: var(--bg-panel);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            box-sizing: border-box;
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        button {
+            background-color: var(--border);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--text-main);
+            padding: 12px 24px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            background-color: rgba(255,255,255,0.1);
+            transform: translateY(-1px);
+        }
+
+        #btn-generate {
+            background-color: rgba(255, 255, 255, 0.05);
+            flex: 1;
+            white-space: nowrap;
+        }
+
+        /* Custom Checkbox Toggle */
+        .god-mode-label {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent);
+            cursor: pointer;
+            letter-spacing: 1px;
+            white-space: nowrap;
+        }
+        .god-mode-label input {
+            accent-color: var(--accent);
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .info-row {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: rgba(0,0,0,0.4);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #status-display {
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        #equation-display {
+            color: #a7f3d0;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+
+        /* RIGHT PANEL: The Sidebar Archive */
+        #right-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 340px;
+            height: 100vh;
+            background: rgba(12, 14, 20, 0.95);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -5px 0 25px rgba(0,0,0,0.5);
+            z-index: 100;
+            transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+            transform: translateX(0); /* Open by default */
+        }
+
+        #right-panel.collapsed {
+            transform: translateX(100%);
+        }
+
+        #sidebar-toggle {
+            position: absolute;
+            top: 25px;
+            left: -46px; /* Stick out to the left of the panel */
+            width: 45px;
+            height: 45px;
+            background: rgba(12, 14, 20, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-right: none;
+            border-radius: 8px 0 0 8px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 20px;
+            font-family: monospace;
+            box-shadow: -5px 0 10px rgba(0,0,0,0.2);
+            transition: background 0.2s ease;
+        }
+
+        #sidebar-toggle:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .sidebar-header {
+            padding: 30px 25px 20px 25px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(255,255,255,0.01);
+        }
+
+        .sidebar-header h3 {
+            margin: 0 0 8px 0;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        .sidebar-header p {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            padding: 20px 25px;
+            overflow-y: hidden; /* Handled by UL */
+            display: flex;
+            flex-direction: column;
+        }
+
+        ul { 
+            list-style-type: none; 
+            padding: 0; 
+            margin: 0;
+            overflow-y: auto;
+            flex: 1;
+            /* Custom Scrollbar */
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+        
+        ul::-webkit-scrollbar { width: 6px; }
+        ul::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        li {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 12px;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Fira Code', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            word-wrap: break-word;
+            line-height: 1.5;
+            transition: all 0.2s ease;
+        }
+
+        li:hover {
+            border-color: rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.6);
+        }
+
+        .li-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .load-btn {
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 8px 12px;
+            font-size: 11px;
+            flex: 1;
+        }
+
+        .load-btn:hover {
+            background: var(--accent);
+            color: #000;
+            transform: none;
+        }
+
+        .del-btn {
+            background: transparent;
+            border: 1px solid #ef4444;
+            color: #ef4444;
+            padding: 8px 12px;
+            font-size: 11px;
+            width: 40px;
+            flex: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .del-btn:hover {
+            background: #ef4444;
+            color: #fff;
+            transform: none;
+        }
+
+        @media (max-width: 1100px) {
+            body { flex-direction: column; overflow: auto; }
+            #right-panel { width: 100%; border-left: none; border-top: 1px solid var(--border); box-sizing: border-box; min-height: 50vh; }
+            #left-panel { min-height: auto; padding: 20px 10px; }
+            .canvas-container { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Three.js 3D Background Canvas -->
+    <canvas id="three-bg" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1;"></canvas>
+
+    <div id="left-panel">
+        <div class="canvas-container">
+            <canvas id="universe-canvas" width="600" height="600"></canvas>
+        </div>
+        
+        <div class="controls">
+            <div class="control-row">
+                <button id="btn-generate">Generate Manually</button>
+                <label class="god-mode-label">
+                    <input type="checkbox" id="auto-search" checked> 
+                    AUTOMATED SEARCH
+                </label>
+            </div>
+            
+            <div class="info-row">
+                <div id="status-display">Status: Searching...</div>
+                <div id="equation-display">Law: None</div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="right-panel">
+        <div id="sidebar-toggle">▶</div>
+        <div class="sidebar-header">
+            <h3>Viable Universes</h3>
+            <p>Archive of physics equations that successfully maintained homeostasis for 15s.</p>
+        </div>
+        <div class="sidebar-content">
+            <ul id="saved-list"></ul>
+        </div>
+    </div>
+    
+    <script src="main.js"></script>
+
+    <script>
+        // Handle Sidebar Toggle
+        const rightPanel = document.getElementById('right-panel');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        
+        sidebarToggle.addEventListener('click', () => {
+            rightPanel.classList.toggle('collapsed');
+            if (rightPanel.classList.contains('collapsed')) {
+                sidebarToggle.innerText = "◀";
+            } else {
+                sidebarToggle.innerText = "▶";
+            }
+        });
+    </script>
+
+    <!-- Three.js UI Script -->
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three-bg'), alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        // Create the "Math Void" - A sprawling 3D particle system
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 4000;
+        const posArray = new Float32Array(particlesCount * 3);
+        
+        for(let i = 0; i < particlesCount * 3; i++) {
+            // Spread particles in a massive sphere
+            posArray[i] = (Math.random() - 0.5) * 15;
+        }
+        
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        
+        // Custom material to match the UI bioluminescence
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.02,
+            color: 0x00e5ff,
+            transparent: true,
+            opacity: 0.4,
+            blending: THREE.AdditiveBlending
+        });
+        
+        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particlesMesh);
+        
+        camera.position.z = 3;
+
+        // Subtle mouse interaction (Parallax)
+        let mouseX = 0;
+        let mouseY = 0;
+        document.addEventListener('mousemove', (event) => {
+            mouseX = (event.clientX / window.innerWidth) - 0.5;
+            mouseY = (event.clientY / window.innerHeight) - 0.5;
+        });
+
+        const clock = new THREE.Clock();
+
+        function animateThree() {
+            requestAnimationFrame(animateThree);
+            const elapsedTime = clock.getElapsedTime();
+            
+            // Slow rotation of the void
+            particlesMesh.rotation.y = elapsedTime * 0.03;
+            particlesMesh.rotation.x = elapsedTime * 0.015;
+            
+            // Smooth parallax effect
+            camera.position.x += (mouseX * 1.5 - camera.position.x) * 0.05;
+            camera.position.y += (-mouseY * 1.5 - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+            
+            renderer.render(scene, camera);
+        }
+        animateThree();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
