@@ -11,49 +11,148 @@ body, html {
 
 canvas {
     display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
 }
 
+/* SIDEBAR STYLES */
+#sidebar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100%;
+    background: rgba(5, 5, 10, 0.85);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 20;
+    padding: 20px;
+    box-sizing: border-box;
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+}
+
+#sidebar h2 {
+    margin-top: 0;
+    color: #fff;
+    font-size: 18px;
+    letter-spacing: 2px;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    padding-bottom: 10px;
+}
+
+.sidebar-info {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 20px;
+}
+
+.btn {
+    background: transparent;
+    color: #0ff;
+    border: 1px solid #0ff;
+    padding: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: bold;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    margin-bottom: 20px;
+}
+.btn:hover {
+    background: rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 10px rgba(0,255,255,0.5);
+}
+
+#saved-list {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.saved-item {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 10px;
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+.saved-item-title {
+    color: #fff;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+.saved-actions {
+    display: flex;
+    gap: 5px;
+    margin-top: 10px;
+}
+.saved-actions button {
+    background: none;
+    border: 1px solid #555;
+    color: #aaa;
+    cursor: pointer;
+    font-size: 10px;
+    padding: 3px 8px;
+}
+.saved-actions button:hover {
+    color: #fff;
+    border-color: #fff;
+}
+
+
+/* MAIN UI OVERLAY */
 #ui {
     position: absolute;
     top: 20px;
     left: 20px;
     z-index: 10;
-    pointer-events: none; /* Let clicks pass through to canvas */
+    pointer-events: none; 
     background: rgba(5, 5, 10, 0.7);
     padding: 25px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-left: 4px solid #0ff;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
+    width: 320px;
 }
 
 h1 {
-    margin: 0 0 15px 0;
+    margin: 0 0 10px 0;
     font-size: 26px;
     letter-spacing: 6px;
-    text-transform: uppercase;
     color: #fff;
     text-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
 }
 
+#status-banner {
+    background: rgba(255, 255, 0, 0.2);
+    color: #ff0;
+    padding: 5px 10px;
+    font-weight: bold;
+    font-size: 12px;
+    margin-bottom: 15px;
+    border-left: 2px solid #ff0;
+}
+
 #info {
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.8;
     color: #bbb;
 }
 
-#info span {
-    color: #fff;
-    font-weight: bold;
-}
+.highlight-pink { color: #f0f !important; font-weight: bold; }
+.highlight-cyan { color: #0ff !important; font-weight: bold; }
 
 .controls-hint {
     margin-top: 20px;
     padding-top: 15px;
     border-top: 1px solid rgba(255,255,255,0.1);
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.6;
     color: #666;
+    pointer-events: auto; /* allow clicking to lock */
 }
 .controls-hint strong {
     color: #0ff;

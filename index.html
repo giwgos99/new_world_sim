@@ -7,22 +7,40 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Sidebar for Archive -->
+    <div id="sidebar">
+        <h2>Void Archive</h2>
+        <div class="sidebar-info">Stable universes auto-save here.</div>
+        <button id="btn-save" class="btn">MANUAL SAVE VOID</button>
+        <div id="saved-list">
+            <!-- Saved items will appear here -->
+        </div>
+    </div>
+
+    <!-- Main UI overlay -->
     <div id="ui">
         <h1>THE VOID</h1>
+        <div id="status-banner">Evaluating...</div>
+        
         <div id="info">
-            Dimensions (D): <span id="dim-count">-</span><br>
-            Current Affinity Law: <br><span id="affinity-law" style="color: #f0f;">-</span><br>
-            Emergent Events: <span id="event-count">0</span>
+            Dimensions (D): <span id="dim-count" class="highlight-cyan">-</span><br>
+            <br>
+            <strong>Physics Laws for this Void:</strong>
+            <div id="active-rules-container" style="margin: 5px 0 15px 0; padding-left: 10px; border-left: 2px solid #555; font-size: 11px;">
+                <!-- Rules injected here -->
+            </div>
+            
+            Emergent Events: <span id="event-count">0</span><br>
+            Active Bonds: <span id="bond-count">0</span><br>
+            Void Age: <span id="void-age">0</span>
         </div>
         <div class="controls-hint">
-            <strong>CLICK TO LOCK MOUSE</strong><br>
-            W A S D - Move<br>
-            Q / E - Down / Up<br>
+            <strong>CLICK CANVAS TO LOCK MOUSE</strong><br>
+            W A S D - Move | Q / E - Down / Up<br>
             ESC - Unlock Mouse
         </div>
     </div>
     
-    <!-- Three.js for Rendering the Observer's Lens -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="script.js"></script>
 </body>
