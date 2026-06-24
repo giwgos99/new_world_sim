@@ -248,6 +248,10 @@ function renderArchive() {
 }
 
 document.getElementById('btn-save').addEventListener('click', saveCurrentUniverse);
+document.getElementById('btn-resume-mining').addEventListener('click', () => {
+    isMining = true;
+    startUniverse();
+});
 
 
 // ==========================================
@@ -266,6 +270,7 @@ document.body.appendChild(renderer.domElement);
 let engine;
 let particleSystem;
 let autoSaved = false;
+let isMining = true;
 const eventMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
 let activeLines = [];
 
@@ -299,9 +304,17 @@ function startUniverse(config = null) {
         </div>
     `).join('');
 
-    document.getElementById('status-banner').innerText = "EVALUATING (Compiling Math...)";
-    document.getElementById('status-banner').style.color = "#ff0";
-    document.getElementById('status-banner').style.borderColor = "#ff0";
+    if (config) {
+        isMining = false;
+        document.getElementById('status-banner').innerText = "OBSERVING SAVED UNIVERSE";
+        document.getElementById('status-banner').style.color = "#0ff";
+        document.getElementById('status-banner').style.borderColor = "#0ff";
+    } else {
+        isMining = true;
+        document.getElementById('status-banner').innerText = "EVALUATING (Compiling Math...)";
+        document.getElementById('status-banner').style.color = "#ff0";
+        document.getElementById('status-banner').style.borderColor = "#ff0";
+    }
 
     // Setup Geometry
     const geometry = new THREE.BufferGeometry();
@@ -371,22 +384,33 @@ function animate() {
 
     let status = engine.tick();
 
-    // God System Auto-Restart & Auto-Save
-    if (status === "DEAD") {
-        document.getElementById('status-banner').innerText = "WIPING DEAD UNIVERSE...";
-        startUniverse(); 
-        return;
-    } else if (status === "ALIVE") {
-        document.getElementById('status-banner').innerText = "LIFE ARCHIVED! Mining next universe...";
-        document.getElementById('status-banner').style.color = "#0f0";
-        document.getElementById('status-banner').style.borderColor = "#0f0";
-        
-        if (!autoSaved) {
-            saveCurrentUniverse(); 
-            autoSaved = true;
+    if (isMining) {
+        // God System Auto-Restart & Auto-Save
+        if (status === "DEAD") {
+            document.getElementById('status-banner').innerText = "WIPING DEAD UNIVERSE...";
+            startUniverse(); 
+            return;
+        } else if (status === "ALIVE") {
+            document.getElementById('status-banner').innerText = "LIFE ARCHIVED! Mining next universe...";
+            document.getElementById('status-banner').style.color = "#0f0";
+            document.getElementById('status-banner').style.borderColor = "#0f0";
+            
+            if (!autoSaved) {
+                saveCurrentUniverse(); 
+                autoSaved = true;
+            }
+            startUniverse(); // IMMEDIATELY CONTINUE MINING
+            return;
         }
-        startUniverse(); // IMMEDIATELY CONTINUE MINING
-        return;
+    } else {
+        // Observer Mode
+        if (status === "DEAD") {
+            document.getElementById('status-banner').innerText = "OBSERVING: Universe Collapsed";
+            document.getElementById('status-banner').style.color = "#f00";
+        } else if (status === "ALIVE") {
+            document.getElementById('status-banner').innerText = "OBSERVING: Stable Universe";
+            document.getElementById('status-banner').style.color = "#0f0";
+        }
     }
 
     // UI Updates
