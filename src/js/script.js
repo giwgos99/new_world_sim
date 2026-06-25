@@ -62,18 +62,32 @@ class VoidEngine {
             this.rules = config.rules.map(r => {
                 let aOp = r.assignA || '=';
                 let bOp = r.assignB || '=';
+                
+                let effectFuncCode = "";
+                if (r.effectGroups && r.dimMap) {
+                    effectFuncCode = `for(let d=0; d<D; d++) {\n  switch(${JSON.stringify(r.dimMap)}[d]) {\n`;
+                    for(let g=0; g<r.effectGroups.length; g++) {
+                        effectFuncCode += `    case ${g}: { let tA = ${r.effectGroups[g].eAStr}; let tB = ${r.effectGroups[g].eBStr}; a[d]${aOp}tA; b[d]${bOp}tB; break; }\n`;
+                    }
+                    effectFuncCode += `  }\n}`;
+                } else {
+                    effectFuncCode = `for(let d=0; d<D; d++) { let tA = ${r.effectAStr}; let tB = ${r.effectBStr}; a[d]${aOp}tA; b[d]${bOp}tB; }`;
+                }
+
                 return {
                     triggerStr: r.triggerStr,
                     effectAStr: r.effectAStr,
                     effectBStr: r.effectBStr,
+                    effectGroups: r.effectGroups,
+                    dimMap: r.dimMap,
                     assignA: aOp,
                     assignB: bOp,
                     triggerFunc: new Function("a", "b", r.triggerStr),
-                    effectFunc: new Function("a", "b", "D", `for(let d=0; d<D; d++) { let tA = ${r.effectAStr}; let tB = ${r.effectBStr}; a[d]${aOp}tA; b[d]${bOp}tB; }`)
+                    effectFunc: new Function("a", "b", "D", effectFuncCode)
                 };
             });
         } else {
-            this.D = Math.floor(Math.random() * 18) + 3; // 3 to 20 Potential Dimensions
+            this.D = Math.floor(Math.random() * 50) + 1; // 1 to 50 Potential Dimensions
             let numRules = Math.floor(Math.random() * 15) + 1; // 1 to 15 AST equations
 
             // --- AST CONFIG (BIAS 3 FIX) ---
@@ -116,20 +130,38 @@ class VoidEngine {
                 let cmpOps = ['>', '<', '>=', '<='];
                 let cmp = cmpOps[Math.floor(Math.random() * cmpOps.length)];
                 let tStr = `return (${generateMath(this.astConfig.triggerDepth, triggerVars, this.astConfig)}) ${cmp} ${this.triggerThreshold.toFixed(4)};`;
-                let eAStr = generateMath(this.astConfig.effectDepth, effectVars, this.astConfig);
-                let eBStr = generateMath(this.astConfig.effectDepth, effectVars, this.astConfig);
+                
                 let assignA = assignOps[Math.floor(Math.random() * assignOps.length)];
                 let assignB = assignOps[Math.floor(Math.random() * assignOps.length)];
+
+                // Bias 1 Fix: Per-dimension group effects
+                let numEffectGroups = Math.floor(Math.random() * Math.min(this.D, 5)) + 1;
+                let effectGroups = [];
+                for(let g=0; g<numEffectGroups; g++) {
+                    effectGroups.push({
+                        eAStr: generateMath(this.astConfig.effectDepth, effectVars, this.astConfig),
+                        eBStr: generateMath(this.astConfig.effectDepth, effectVars, this.astConfig)
+                    });
+                }
+                
+                let dimMap = [];
+                for(let d=0; d<this.D; d++) dimMap.push(Math.floor(Math.random() * numEffectGroups));
+
+                let effectFuncCode = `for(let d=0; d<D; d++) {\n  switch(${JSON.stringify(dimMap)}[d]) {\n`;
+                for(let g=0; g<numEffectGroups; g++) {
+                    effectFuncCode += `    case ${g}: { let tA = ${effectGroups[g].eAStr}; let tB = ${effectGroups[g].eBStr}; a[d]${assignA}tA; b[d]${assignB}tB; break; }\n`;
+                }
+                effectFuncCode += `  }\n}`;
 
                 try {
                     this.rules.push({
                         triggerStr: tStr,
-                        effectAStr: eAStr,
-                        effectBStr: eBStr,
+                        effectGroups: effectGroups,
+                        dimMap: dimMap,
                         assignA: assignA,
                         assignB: assignB,
                         triggerFunc: new Function("a", "b", tStr),
-                        effectFunc: new Function("a", "b", "D", `for(let d=0; d<D; d++) { let tA = ${eAStr}; let tB = ${eBStr}; a[d]${assignA}tA; b[d]${assignB}tB; }`)
+                        effectFunc: new Function("a", "b", "D", effectFuncCode)
                     });
                 } catch (e) {
                     console.error("Math Generator built an invalid syntax tree. Skipping rule.");
@@ -346,6 +378,8 @@ function saveCurrentUniverse() {
             triggerStr: r.triggerStr,
             effectAStr: r.effectAStr,
             effectBStr: r.effectBStr,
+            effectGroups: r.effectGroups,
+            dimMap: r.dimMap,
             assignA: r.assignA,
             assignB: r.assignB
         }))
@@ -500,13 +534,26 @@ function startUniverse(config = null) {
 
     // Render the AST Math Strings
     const rulesContainer = document.getElementById('active-rules-container');
-    rulesContainer.innerHTML = constantsHtml + engine.rules.map((r, i) => `
-        <div style="margin-bottom: 12px; line-height: 1.4;">
-            <strong style="color:#0ff">R${i + 1} Trigger:</strong><br> <span style="color:#aaa">${r.triggerStr}</span><br>
-            <strong style="color:#f0f">R${i + 1} Effect A:</strong><br> <span style="color:#aaa">a[d] ${r.assignA} ${r.effectAStr}</span><br>
-            <strong style="color:#f0f">R${i + 1} Effect B:</strong><br> <span style="color:#aaa">b[d] ${r.assignB} ${r.effectBStr}</span>
-        </div>
-    `).join('');
+    rulesContainer.innerHTML = constantsHtml + engine.rules.map((r, i) => {
+        if (r.effectGroups) {
+            return `
+                <div style="margin-bottom: 12px; line-height: 1.4;">
+                    <strong style="color:#0ff">R${i + 1} Trigger:</strong><br> <span style="color:#aaa">${r.triggerStr}</span><br>
+                    <strong style="color:#f0f">R${i + 1} Effect (${r.effectGroups.length} Groups):</strong><br> 
+                    <span style="color:#aaa">a[d] ${r.assignA} (per-group logic)</span><br>
+                    <span style="color:#aaa">b[d] ${r.assignB} (per-group logic)</span>
+                </div>
+            `;
+        } else {
+            return `
+                <div style="margin-bottom: 12px; line-height: 1.4;">
+                    <strong style="color:#0ff">R${i + 1} Trigger:</strong><br> <span style="color:#aaa">${r.triggerStr}</span><br>
+                    <strong style="color:#f0f">R${i + 1} Effect A:</strong><br> <span style="color:#aaa">a[d] ${r.assignA} ${r.effectAStr}</span><br>
+                    <strong style="color:#f0f">R${i + 1} Effect B:</strong><br> <span style="color:#aaa">b[d] ${r.assignB} ${r.effectBStr}</span>
+                </div>
+            `;
+        }
+    }).join('');
 
     if (config) {
         isMining = false;
