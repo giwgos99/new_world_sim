@@ -3,12 +3,16 @@
 // ==========================================
 function generateMath(depth, vars) {
     if (depth <= 0 || Math.random() < 0.25) {
-        if (Math.random() < 0.4) return (Math.random() * 2 - 1).toFixed(3); // Random constant
+        if (Math.random() < 0.4) {
+            let sign = Math.random() < 0.5 ? 1 : -1;
+            let exp = Math.random() * 10 - 5; // Allows constants from 0.00001 up to 100,000
+            return (sign * Math.pow(10, exp)).toFixed(4); 
+        }
         return vars[Math.floor(Math.random() * vars.length)]; // Random variable
     }
-    // Removed division (/) to prevent instant Infinity/NaN explosions
-    const ops = ['+', '-', '*']; 
-    const funcs = ['Math.sin', 'Math.cos', 'Math.abs', 'Math.tanh', 'Math.sign'];
+    // The math is now fully chaotic. No safety nets. Division, powers, and logs allowed.
+    const ops = ['+', '-', '*', '/', '%']; 
+    const funcs = ['Math.sin', 'Math.cos', 'Math.abs', 'Math.tanh', 'Math.sign', 'Math.exp', 'Math.log'];
     // Special forms that need wrapping (sqrt of abs to prevent NaN)
     const specialFuncs = ['sqrtabs', 'mod'];
     
@@ -40,16 +44,8 @@ class VoidEngine {
         if (config && config.rules) {
             this.D = config.D;
             // Restore Universal Constants from saved config
-            this.thermalWander = config.thermalWander || 0.02;
-            this.bondDecay = config.bondDecay || 0.01;
-            this.bondIncrement = config.bondIncrement || 0.5;
-            this.bondCap = config.bondCap || 1.0;
             this.interactionsPerTick = config.interactionsPerTick || 400;
-            this.boundaryMode = config.boundaryMode || 'tanh';
-            this.topology = config.topology || 'global';
             this.initialState = config.initialState || 'chaos';
-            this.dimStr = config.dimStr || 'D';
-            this.dimFunc = new Function("D", "events", "age", `return Math.max(3, Math.min(15, Math.floor(Math.abs(${this.dimStr}))));`);
             
             // Compile saved string formulas back into native JS functions
             this.rules = config.rules.map(r => ({
@@ -60,30 +56,15 @@ class VoidEngine {
                 effectFunc: new Function("a", "b", "D", `for(let d=0; d<D; d++) { let tA = ${r.effectAStr}; let tB = ${r.effectBStr}; a[d]=tA; b[d]=tB; }`)
             }));
         } else {
-            this.D = Math.floor(Math.random() * 6) + 5; // 5 to 10 Dimensions
+            this.D = Math.floor(Math.random() * 18) + 3; // 3 to 20 Potential Dimensions
             let numRules = Math.floor(Math.random() * 3) + 2; // 2 to 4 AST equations
             
             // --- RANDOMIZED UNIVERSAL CONSTANTS ---
             // These are the ONLY hardcoded scaffolding. Each universe gets random values.
-            this.thermalWander = Math.random() * 0.05 + 0.005;   // 0.005 to 0.055
-            this.bondDecay = Math.random() * 0.03 + 0.005;       // 0.005 to 0.035
-            this.bondIncrement = Math.random() * 0.8 + 0.2;      // 0.2 to 1.0
-            this.bondCap = Math.random() * 1.5 + 0.5;            // 0.5 to 2.0
-            this.interactionsPerTick = Math.floor(Math.random() * 400) + 100; // 100 to 500
-            // Randomly pick how states are bounded (each creates very different dynamics)
-            const modes = ['tanh', 'wrap', 'clamp'];
-            this.boundaryMode = modes[Math.floor(Math.random() * modes.length)];
-            
-            // Interaction topology: global (any particle) vs network (bias towards bonded partners)
-            this.topology = Math.random() > 0.5 ? 'global' : 'network';
+            this.interactionsPerTick = Math.floor(Math.random() * 900) + 100; // 100 to 1000
             
             // Initial State: chaos (scattered) vs singularity (Big Bang from exactly 0)
             this.initialState = Math.random() > 0.5 ? 'chaos' : 'singularity';
-            
-            // AST-Driven Dimensional Emergence
-            let dimVars = ["D", "events", "age", "(events/age)", "(age%10)"];
-            this.dimStr = generateMath(3, dimVars);
-            this.dimFunc = new Function("D", "events", "age", `return Math.max(3, Math.min(15, Math.floor(Math.abs(${this.dimStr}))));`);
             
             // Build the variable pools available to the AST Generator
             let triggerVars = [];
@@ -137,50 +118,11 @@ class VoidEngine {
     tick() {
         this.age++;
         this.events = [];
-        
-        // AST-Driven Dimensional Emergence (Every 50 ticks)
-        if (this.age > 0 && this.age % 50 === 0) {
-            try {
-                let newD = this.dimFunc(this.D, this.totalEvents, this.age);
-                if (!isNaN(newD) && newD !== this.D) {
-                    if (newD > this.D) {
-                        // Expand spatial dimensions
-                        for (let ent of this.entities) {
-                            while (ent.states.length < newD) ent.states.push(0.0);
-                        }
-                    } else {
-                        // Collapse spatial dimensions
-                        for (let ent of this.entities) {
-                            ent.states.length = newD;
-                        }
-                    }
-                    this.D = newD;
-                }
-            } catch (e) {
-                // If dimensional math explodes, ignore it
-            }
-        }
 
-        // 1. Mutate states & Decay Bonds (using THIS universe's constants)
+        // 1. Decay Bonds (The Tracer Dye for the Observer Screen)
         for (let ent of this.entities) {
-            for (let d = 0; d < this.D; d++) {
-                ent.states[d] += (Math.random() - 0.5) * this.thermalWander;
-                if (isNaN(ent.states[d]) || !isFinite(ent.states[d])) ent.states[d] = 0;
-                // Apply this universe's boundary mode
-                if (this.boundaryMode === 'tanh') {
-                    ent.states[d] = Math.tanh(ent.states[d]);
-                } else if (this.boundaryMode === 'wrap') {
-                    // Wrap around: overshooting +1 wraps to -1 (like a torus)
-                    if (ent.states[d] > 1) ent.states[d] -= 2;
-                    if (ent.states[d] < -1) ent.states[d] += 2;
-                } else {
-                    // Clamp (original behavior)
-                    if (ent.states[d] > 1) ent.states[d] = 1;
-                    if (ent.states[d] < -1) ent.states[d] = -1;
-                }
-            }
             for (let partnerId in ent.bonds) {
-                ent.bonds[partnerId] -= this.bondDecay;
+                ent.bonds[partnerId] -= 0.01; // OBS_BOND_DECAY
                 if (ent.bonds[partnerId] <= 0) delete ent.bonds[partnerId];
             }
         }
@@ -188,19 +130,10 @@ class VoidEngine {
         // 2. Physics Interactions: Using pure AST Generated Math!
         for (let i = 0; i < this.interactionsPerTick; i++) {
             let idxA = Math.floor(Math.random() * this.entities.length);
-            let entA = this.entities[idxA];
-            
-            let idxB;
-            // Network Topology: 70% chance to interact with someone you already know
-            if (this.topology === 'network' && Math.random() < 0.7 && Object.keys(entA.bonds).length > 0) {
-                let partners = Object.keys(entA.bonds);
-                idxB = parseInt(partners[Math.floor(Math.random() * partners.length)]);
-            } else {
-                idxB = Math.floor(Math.random() * this.entities.length);
-            }
-            
+            let idxB = Math.floor(Math.random() * this.entities.length);
             if (idxA === idxB) continue;
-
+            
+            let entA = this.entities[idxA];
             let entB = this.entities[idxB];
             let triggered = false;
 
@@ -362,18 +295,11 @@ function saveCurrentUniverse() {
     let saved = JSON.parse(localStorage.getItem('voidArchive')) || [];
     let config = {
         id: Date.now(),
-        name: `AST Void D${engine.D} [${engine.boundaryMode}] Bonds:${engine.getActiveBondCount()}`,
+        name: `AST Void D${engine.D} Bonds:${engine.getActiveBondCount()}`,
         D: engine.D,
         // Save Universal Constants so the universe can be perfectly reproduced
-        thermalWander: engine.thermalWander,
-        bondDecay: engine.bondDecay,
-        bondIncrement: engine.bondIncrement,
-        bondCap: engine.bondCap,
         interactionsPerTick: engine.interactionsPerTick,
-        boundaryMode: engine.boundaryMode,
-        topology: engine.topology,
         initialState: engine.initialState,
-        dimStr: engine.dimStr,
         entityCount: engine.entities.length,
         rules: engine.rules.map(r => ({
             triggerStr: r.triggerStr,
@@ -502,23 +428,27 @@ function startUniverse(config = null) {
     engine = new VoidEngine(entityCount, config);
 
     // Update UI
-    document.getElementById('dim-count').innerText = engine.D;
+    // Calculate "Effective Dimensions" (Dimensions with variance > 0.05)
+    let effectiveDims = 0;
+    for (let d = 0; d < engine.D; d++) {
+        let sum = 0;
+        for (let ent of engine.entities) sum += ent.states[d] || 0;
+        let avg = sum / engine.entities.length;
+        let variance = 0;
+        for (let ent of engine.entities) variance += Math.pow((ent.states[d] || 0) - avg, 2);
+        variance /= engine.entities.length;
+        if (variance > 0.05) effectiveDims++;
+    }
+
+    document.getElementById('dim-count').innerText = `${effectiveDims} (of ${engine.D})`;
     
     // Show Universal Constants
     const constantsHtml = `
         <div style="margin: 8px 0; padding: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); font-size: 10px; line-height: 1.6;">
             <strong style="color:#ff0">Universal Constants:</strong><br>
             Entities: <span style="color:#0ff">${engine.entities.length}</span> |
-            Topology: <span style="color:#0ff">${engine.topology}</span><br>
-            Boundary: <span style="color:#0ff">${engine.boundaryMode}</span> |
             Origin: <span style="color:#0ff">${engine.initialState}</span><br>
-            Wander: <span style="color:#0ff">${engine.thermalWander.toFixed(4)}</span> |
-            Decay: <span style="color:#0ff">${engine.bondDecay.toFixed(4)}</span><br>
-            Bond+: <span style="color:#0ff">${engine.bondIncrement.toFixed(2)}</span> |
-            Cap: <span style="color:#0ff">${engine.bondCap.toFixed(2)}</span> |
-            Interactions: <span style="color:#0ff">${engine.interactionsPerTick}</span><br>
-            <strong style="color:#f0f; margin-top:5px; display:block;">Dimensional Math (D):</strong>
-            <span style="color:#aaa;">D = Math.floor(| ${engine.dimStr} |)</span>
+            Interactions/Tick: <span style="color:#0ff">${engine.interactionsPerTick}</span>
         </div>
     `;
     
@@ -623,7 +553,7 @@ document.getElementById('btn-reset-cam').addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => { if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
 document.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
-document.addEventListener('click', (e) => { if (e.target.tagName !== 'BUTTON') document.body.requestPointerLock(); });
+document.querySelector('canvas').addEventListener('click', () => { document.body.requestPointerLock(); });
 
 document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === document.body) {
