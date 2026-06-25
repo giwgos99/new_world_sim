@@ -369,8 +369,8 @@ function render() {
             frameCount++;
             survivalFrames++;
             
-            // Check viability every 30 frames
-            if (frameCount % 30 === 0) {
+            // Check viability every 60 frames
+            if (frameCount % 60 === 0) {
                 gl.bindFramebuffer(gl.FRAMEBUFFER, bufferA.fb);
                 gl.readPixels(0, 0, WIDTH, HEIGHT, gl.RGBA, gl.UNSIGNED_BYTE, pixelReadBuffer);
                 gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -406,8 +406,8 @@ function render() {
                 
                 // --- THE EDGE OF CHAOS FILTER ---
                 let isDead = (averageMass < 5.0); // Faded away to near-black
-                let isFrozen = (hasPreviousBuffer && activityRatio < 0.001); // Less than 0.1% change (Micro-vibrating crystal)
-                let isChaos = (hasPreviousBuffer && activityRatio > 0.15); // >15% of the screen is violently flashing
+                let isFrozen = (hasPreviousBuffer && activityRatio < 0.0005); // Less than 0.05% change — truly frozen crystal
+                let isChaos = (hasPreviousBuffer && activityRatio > 0.10); // >10% of the screen is violently flashing
                 
                 if (isDead || isCancer || isFrozen || isChaos) {
                     createNewUniverse(); // Kill it
@@ -418,7 +418,8 @@ function render() {
                 }
             }
             
-            if (survivalFrames === 900) {
+            // Only archive if the universe survives ~50 seconds of sustained, non-trivial activity
+            if (survivalFrames === 3000) {
                 saveUniverse(currentEquation, currentSeedType);
                 createNewUniverse(); // Find another one!
             }

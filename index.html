@@ -37,7 +37,7 @@
             Projection: dims <span id="proj-dims" class="highlight-cyan">0,1,2</span>
         </div>
         <div style="margin: 8px 0; padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.1);">
-            <div style="display: flex; gap: 12px;">
+            <div style="display: flex; gap: 12px; margin-bottom: 8px;">
                 <div style="flex: 1;">
                     <label style="font-size: 10px; color: #888;">SPEED: <span id="speed-label" class="highlight-cyan">1</span>x</label>
                     <input type="range" id="speed-slider" min="1" max="10" value="1" style="width: 100%; accent-color: #0ff;">
@@ -46,6 +46,15 @@
                     <label style="font-size: 10px; color: #888;">EVENTS: <span id="lines-label" class="highlight-cyan">20</span></label>
                     <input type="range" id="lines-slider" min="0" max="100" value="20" style="width: 100%; accent-color: #f0f;">
                 </div>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <label style="font-size: 10px; color: #888; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" id="hide-stagnant-checkbox" checked style="accent-color: #0ff;"> HIDE STAGNANT PARTICLES
+                </label>
+            </div>
+            <div style="margin-top: 8px; font-size: 10px; color: #aaa; line-height: 1.4;">
+                <strong>Colors:</strong> RGB mapped to 3 unseen dimensions.<br>
+                <strong>Size:</strong> Total mathematical "energy" (magnitude).
             </div>
         </div>
         <div class="controls-hint">
