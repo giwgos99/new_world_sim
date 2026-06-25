@@ -1,35 +1,42 @@
 // ==========================================
 // AST MATH GENERATOR
 // ==========================================
-function generateMath(depth, vars) {
-    if (depth <= 0 || Math.random() < 0.25) {
-        if (Math.random() < 0.4) {
-            let sign = Math.random() < 0.5 ? 1 : -1;
-            let exp = Math.random() * 10 - 5; // Allows constants from 0.00001 up to 100,000
-            return (sign * Math.pow(10, exp)).toFixed(4); 
-        }
+function generateMath(depth, vars, config) {
+    if (depth <= 0 || Math.random() < config.termChance) {
+        if (Math.random() < config.constChance) { let mag = Math.pow(10, Math.random() * 6 - 3); return ((Math.random() > 0.5 ? 1 : -1) * mag * Math.random()).toFixed(6); }
         return vars[Math.floor(Math.random() * vars.length)]; // Random variable
     }
-    // The math is now fully chaotic. No safety nets. Division, powers, and logs allowed.
-    const ops = ['+', '-', '*', '/', '%']; 
-    const funcs = ['Math.sin', 'Math.cos', 'Math.abs', 'Math.tanh', 'Math.sign', 'Math.exp', 'Math.log'];
-    // Special forms that need wrapping (sqrt of abs to prevent NaN)
+    // Raw math. No safety nets. The void decides what works.
+    const ops = ['+', '-', '*', '/', '%', '**'];
+    const funcs = ['Math.sin', 'Math.cos', 'Math.abs', 'Math.tanh', 'Math.sign', 'Math.exp', 'Math.log',
+                   'Math.atan', 'Math.floor', 'Math.ceil', 'Math.round', 'Math.trunc'];
     const specialFuncs = ['sqrtabs', 'mod'];
-    
-    let roll = Math.random();
-    if (roll < 0.1) {
-        // Special forms (10% chance)
+    const binaryFuncs = ['Math.pow', 'Math.min', 'Math.max', 'Math.atan2', 'Math.hypot'];
+
+    let totalWeight = config.wSpecial + config.wBinaryFunc + config.wCond + config.wUnary + config.wBinaryOp;
+    let roll = Math.random() * totalWeight;
+
+    if (roll < config.wSpecial) {
         let sf = specialFuncs[Math.floor(Math.random() * specialFuncs.length)];
-        if (sf === 'sqrtabs') return `Math.sqrt(Math.abs(${generateMath(depth - 1, vars)}))`;
-        if (sf === 'mod') return `((${generateMath(depth - 1, vars)} % 2.0 + 2.0) % 2.0 - 1.0)`;
-    } else if (roll < 0.4) {
-        // Unary function (30% chance)
-        let f = funcs[Math.floor(Math.random() * funcs.length)];
-        return `${f}(${generateMath(depth - 1, vars)})`;
+        if (sf === 'sqrtabs') return `Math.sqrt(Math.abs(${generateMath(depth - 1, vars, config)}))`;
+        if (sf === 'mod') return `((${generateMath(depth - 1, vars, config)} % 2.0 + 2.0) % 2.0 - 1.0)`;
     }
-    // Binary operator (60% chance)
+    roll -= config.wSpecial;
+    if (roll < config.wBinaryFunc) {
+        let bf = binaryFuncs[Math.floor(Math.random() * binaryFuncs.length)];
+        return `${bf}(${generateMath(depth - 1, vars, config)}, ${generateMath(depth - 1, vars, config)})`;
+    }
+    roll -= config.wBinaryFunc;
+    if (roll < config.wCond) {
+        return `(${generateMath(depth - 1, vars, config)} > ${generateMath(depth - 1, vars, config)} ? ${generateMath(depth - 1, vars, config)} : ${generateMath(depth - 1, vars, config)})`;
+    }
+    roll -= config.wCond;
+    if (roll < config.wUnary) {
+        let f = funcs[Math.floor(Math.random() * funcs.length)];
+        return `${f}(${generateMath(depth - 1, vars, config)})`;
+    }
     let o = ops[Math.floor(Math.random() * ops.length)];
-    return `(${generateMath(depth - 1, vars)} ${o} ${generateMath(depth - 1, vars)})`;    
+    return `(${generateMath(depth - 1, vars, config)} ${o} ${generateMath(depth - 1, vars, config)})`;
 }
 
 
@@ -40,60 +47,96 @@ function generateMath(depth, vars) {
 class VoidEngine {
     constructor(numEntities, config = null) {
         this.rules = [];
-        
+
         if (config && config.rules) {
             this.D = config.D;
+            this.astConfig = config.astConfig || { triggerDepth: 4, effectDepth: 3 }; // Fallback for older saves
             // Restore Universal Constants from saved config
+            this.bondDecay = config.bondDecay || 0.01;
+            this.bondIncrement = config.bondIncrement || 0.5;
+            this.bondCap = config.bondCap || 1.0;
             this.interactionsPerTick = config.interactionsPerTick || 400;
-            this.initialState = config.initialState || 'chaos';
-            
+            this.triggerThreshold = config.triggerThreshold || 0.5;
+
             // Compile saved string formulas back into native JS functions
-            this.rules = config.rules.map(r => ({
-                triggerStr: r.triggerStr,
-                effectAStr: r.effectAStr,
-                effectBStr: r.effectBStr,
-                triggerFunc: new Function("a", "b", r.triggerStr),
-                effectFunc: new Function("a", "b", "D", `for(let d=0; d<D; d++) { let tA = ${r.effectAStr}; let tB = ${r.effectBStr}; a[d]=tA; b[d]=tB; }`)
-            }));
+            this.rules = config.rules.map(r => {
+                let aOp = r.assignA || '=';
+                let bOp = r.assignB || '=';
+                return {
+                    triggerStr: r.triggerStr,
+                    effectAStr: r.effectAStr,
+                    effectBStr: r.effectBStr,
+                    assignA: aOp,
+                    assignB: bOp,
+                    triggerFunc: new Function("a", "b", r.triggerStr),
+                    effectFunc: new Function("a", "b", "D", `for(let d=0; d<D; d++) { let tA = ${r.effectAStr}; let tB = ${r.effectBStr}; a[d]${aOp}tA; b[d]${bOp}tB; }`)
+                };
+            });
         } else {
             this.D = Math.floor(Math.random() * 18) + 3; // 3 to 20 Potential Dimensions
-            let numRules = Math.floor(Math.random() * 3) + 2; // 2 to 4 AST equations
-            
+            let numRules = Math.floor(Math.random() * 15) + 1; // 1 to 15 AST equations
+
+            // --- AST CONFIG (BIAS 3 FIX) ---
+            this.astConfig = {
+                termChance: Math.random() * 0.4 + 0.1,      // 10%-50%
+                constChance: Math.random() * 0.6 + 0.1,      // 10%-70%
+                wSpecial: Math.random(),
+                wBinaryFunc: Math.random(),
+                wCond: Math.random(),
+                wUnary: Math.random(),
+                wBinaryOp: Math.random(),
+                triggerDepth: Math.floor(Math.random() * 5) + 2, // 2-6
+                effectDepth: Math.floor(Math.random() * 4) + 2   // 2-5
+            };
+
             // --- RANDOMIZED UNIVERSAL CONSTANTS ---
-            // These are the ONLY hardcoded scaffolding. Each universe gets random values.
-            this.interactionsPerTick = Math.floor(Math.random() * 900) + 100; // 100 to 1000
-            
-            // Initial State: chaos (scattered) vs singularity (Big Bang from exactly 0)
-            this.initialState = Math.random() > 0.5 ? 'chaos' : 'singularity';
-            
+            this.bondDecay = Math.random() * 0.03 + 0.005;       // 0.005 to 0.035
+            this.bondIncrement = Math.random() * 0.8 + 0.2;      // 0.2 to 1.0
+            this.bondCap = Math.random() * 1.5 + 0.5;            // 0.5 to 2.0
+            this.interactionsPerTick = Math.floor(Math.random() * 400) + 100; // 100 to 500
+            this.triggerThreshold = Math.random() * 2 - 1;       // -1.0 to 1.0
+
             // Build the variable pools available to the AST Generator
             let triggerVars = [];
-            for(let d=0; d<this.D; d++) { triggerVars.push(`a[${d}]`); triggerVars.push(`b[${d}]`); }
-            
+            for (let d = 0; d < this.D; d++) { triggerVars.push(`a[${d}]`); triggerVars.push(`b[${d}]`); }
+
             // Effect vars allow cross-dimensional bleeding with wider reach
-            let effectVars = ["a[d]", "b[d]", "a[(d+1)%D]", "b[(d+1)%D]", "a[(d+2)%D]", "b[(d+2)%D]"];
-            
+            let effectVars = ["a[d]", "b[d]"];
+            let numOffsets = Math.floor(Math.random() * 5) + 1; // 1-5 additional offset variables
+            for (let k = 0; k < numOffsets; k++) {
+                let offset = Math.floor(Math.random() * this.D);
+                effectVars.push(`a[(d+${offset})%D]`);
+                effectVars.push(`b[(d+${offset})%D]`);
+            }
+
+            // Possible assignment operators — how effects apply to state
+            const assignOps = ['=', '+=', '-=', '*='];
+
             for (let i = 0; i < numRules; i++) {
-                // Generate raw math text
-                let tStr = `return (${generateMath(4, triggerVars)}) > 0.5;`;
-                let eAStr = generateMath(3, effectVars);
-                let eBStr = generateMath(3, effectVars);
-                
+                let cmpOps = ['>', '<', '>=', '<='];
+                let cmp = cmpOps[Math.floor(Math.random() * cmpOps.length)];
+                let tStr = `return (${generateMath(this.astConfig.triggerDepth, triggerVars, this.astConfig)}) ${cmp} ${this.triggerThreshold.toFixed(4)};`;
+                let eAStr = generateMath(this.astConfig.effectDepth, effectVars, this.astConfig);
+                let eBStr = generateMath(this.astConfig.effectDepth, effectVars, this.astConfig);
+                let assignA = assignOps[Math.floor(Math.random() * assignOps.length)];
+                let assignB = assignOps[Math.floor(Math.random() * assignOps.length)];
+
                 try {
-                    // Compile text into hyper-fast native JS code
                     this.rules.push({
                         triggerStr: tStr,
                         effectAStr: eAStr,
                         effectBStr: eBStr,
+                        assignA: assignA,
+                        assignB: assignB,
                         triggerFunc: new Function("a", "b", tStr),
-                        effectFunc: new Function("a", "b", "D", `for(let d=0; d<D; d++) { let tA = ${eAStr}; let tB = ${eBStr}; a[d]=tA; b[d]=tB; }`)
+                        effectFunc: new Function("a", "b", "D", `for(let d=0; d<D; d++) { let tA = ${eAStr}; let tB = ${eBStr}; a[d]${assignA}tA; b[d]${assignB}tB; }`)
                     });
-                } catch(e) {
+                } catch (e) {
                     console.error("Math Generator built an invalid syntax tree. Skipping rule.");
                 }
             }
         }
-        
+
         // State tracking
         this.entities = [];
         this.events = [];
@@ -101,15 +144,11 @@ class VoidEngine {
         this.age = 0;
         this.isStable = false;
 
-        // Initialize entities
+        // Initialize entities with random states
         for (let i = 0; i < numEntities; i++) {
             let states = [];
             for (let d = 0; d < this.D; d++) {
-                if (this.initialState === 'chaos') {
-                    states.push(Math.random() * 2 - 1);
-                } else {
-                    states.push(0.0); // Big Bang Singularity
-                }
+                states.push(Math.random() * 2 - 1);
             }
             this.entities.push({ id: i, states: states, bonds: {} });
         }
@@ -119,10 +158,10 @@ class VoidEngine {
         this.age++;
         this.events = [];
 
-        // 1. Decay Bonds (The Tracer Dye for the Observer Screen)
+        // 1. Decay Bonds (using THIS universe's constants)
         for (let ent of this.entities) {
             for (let partnerId in ent.bonds) {
-                ent.bonds[partnerId] -= 0.01; // OBS_BOND_DECAY
+                ent.bonds[partnerId] -= this.bondDecay;
                 if (ent.bonds[partnerId] <= 0) delete ent.bonds[partnerId];
             }
         }
@@ -131,8 +170,7 @@ class VoidEngine {
         for (let i = 0; i < this.interactionsPerTick; i++) {
             let idxA = Math.floor(Math.random() * this.entities.length);
             let idxB = Math.floor(Math.random() * this.entities.length);
-            if (idxA === idxB) continue;
-            
+
             let entA = this.entities[idxA];
             let entB = this.entities[idxB];
             let triggered = false;
@@ -143,7 +181,7 @@ class VoidEngine {
                         r.effectFunc(entA.states, entB.states, this.D);
                         triggered = true;
                     }
-                } catch(e) {
+                } catch (e) {
                     // If the math explodes, we ignore it.
                 }
             }
@@ -161,7 +199,7 @@ class VoidEngine {
         // 3. God System Evaluation (The Edge of Chaos) — v0.5 Ultimate Filter
         if (!this.isStable) {
             if (this.age === 400 || this.age === 500) {
-                
+
                 // --- BOND COUNT & NETWORK TOPOLOGY ---
                 let strongBonds = 0;
                 let maxDegree = 0;
@@ -188,7 +226,7 @@ class VoidEngine {
                     for (let ent of this.entities) dimVar += Math.pow(ent.states[d] - avg, 2);
                     dimVar /= this.entities.length;
                     totalVariance += dimVar;
-                    if (dimVar > 0.1) diverseDims++; 
+                    if (dimVar > 0.1) diverseDims++;
                 }
                 let avgVariance = totalVariance / this.D;
 
@@ -200,7 +238,7 @@ class VoidEngine {
                         if (ent.states[d] < minV) minV = ent.states[d];
                         if (ent.states[d] > maxV) maxV = ent.states[d];
                     }
-                    if ((maxV - minV) > 0.5) spreadAxes++; 
+                    if ((maxV - minV) > 0.5) spreadAxes++;
                 }
 
                 if (isNaN(avgVariance)) return "DEAD";
@@ -208,7 +246,7 @@ class VoidEngine {
                 // Snapshots for Time-Based check
                 if (this.age === 400) {
                     this.history_variance = avgVariance;
-                    
+
                     // Track microscopic bond persistence
                     this.history_bond_set = new Set();
                     for (let ent of this.entities) {
@@ -224,7 +262,7 @@ class VoidEngine {
 
                 if (this.age === 500) {
                     let varianceDelta = Math.abs(avgVariance - this.history_variance);
-                    
+
                     // Calculate Microscopic Bond Persistence
                     let persistentBonds = 0;
                     let currentBonds = new Set();
@@ -243,27 +281,27 @@ class VoidEngine {
                     let persistenceRatio = oldTotal > 0 ? (persistentBonds / oldTotal) : 0;
 
                     // --- THE VERDICT (v0.6 - Microscopic Persistence Filter) ---
-                    
+
                     // 1. Crystal Check (Frozen)
                     // If 98%+ of bonds persisted and variance barely moved, it's a dead crystal.
-                    if (persistenceRatio > 0.98 && varianceDelta < 0.005) return "DEAD"; 
-                    
+                    if (persistenceRatio > 0.98 && varianceDelta < 0.005) return "DEAD";
+
                     // 2. Gas Check (Chaotic Noise)
                     // If less than 20% of bonds persisted, the structure is constantly dissolving. Pure noise.
-                    if (persistenceRatio < 0.20) return "DEAD"; 
-                    
+                    if (persistenceRatio < 0.20) return "DEAD";
+
                     // 3. Network Volume Check
-                    let minAllowedBonds = this.entities.length * 0.01; 
-                    let maxAllowedBonds = this.entities.length * 0.5;  
+                    let minAllowedBonds = this.entities.length * 0.01;
+                    let maxAllowedBonds = this.entities.length * 0.5;
                     if (strongBonds < minAllowedBonds || strongBonds > maxAllowedBonds) return "DEAD";
-                    
+
                     // 4. Scale-Free / Complexity Check
                     if (maxDegree < 3 || maxDegree > this.entities.length * 0.25) return "DEAD";
 
-                    // 5. Dimensionality Check
-                    if (diverseDims < Math.floor(this.D * 0.6) || avgVariance < 0.05) return "DEAD"; 
-                    if (spreadAxes < 3) return "DEAD"; 
-                    
+                    // 5. Dimensionality Check — at least 2 active dimensions and some structure
+                    if (diverseDims < 2 || avgVariance < 0.01) return "DEAD";
+                    if (spreadAxes < 2) return "DEAD";
+
                     this.isStable = true;
                 }
             } else if (this.age > 500) {
@@ -297,14 +335,19 @@ function saveCurrentUniverse() {
         id: Date.now(),
         name: `AST Void D${engine.D} Bonds:${engine.getActiveBondCount()}`,
         D: engine.D,
-        // Save Universal Constants so the universe can be perfectly reproduced
+        astConfig: engine.astConfig,
+        bondDecay: engine.bondDecay,
+        bondIncrement: engine.bondIncrement,
+        bondCap: engine.bondCap,
         interactionsPerTick: engine.interactionsPerTick,
-        initialState: engine.initialState,
+        triggerThreshold: engine.triggerThreshold,
         entityCount: engine.entities.length,
         rules: engine.rules.map(r => ({
             triggerStr: r.triggerStr,
             effectAStr: r.effectAStr,
-            effectBStr: r.effectBStr
+            effectBStr: r.effectBStr,
+            assignA: r.assignA,
+            assignB: r.assignB
         }))
     };
     saved.push(config);
@@ -346,7 +389,7 @@ function renderArchive() {
     const list = document.getElementById('saved-list');
     list.innerHTML = '';
     let saved = JSON.parse(localStorage.getItem('voidArchive')) || [];
-    
+
     // Clear legacy incompatible saves
     const validSaves = saved.filter(u => u.rules !== undefined);
     if (validSaves.length !== saved.length) {
@@ -424,7 +467,7 @@ function startUniverse(config = null) {
     autoSaved = false;
 
     // Create new Engine with random entity count (or saved count)
-    let entityCount = config ? (config.entityCount || 2000) : (Math.floor(Math.random() * 1500) + 500); // 500 to 2000
+    let entityCount = config ? (config.entityCount || 2000) : (Math.floor(Math.random() * 2900) + 100); // 100 to 3000
     engine = new VoidEngine(entityCount, config);
 
     // Update UI
@@ -441,24 +484,27 @@ function startUniverse(config = null) {
     }
 
     document.getElementById('dim-count').innerText = `${effectiveDims} (of ${engine.D})`;
-    
+
     // Show Universal Constants
     const constantsHtml = `
         <div style="margin: 8px 0; padding: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); font-size: 10px; line-height: 1.6;">
             <strong style="color:#ff0">Universal Constants:</strong><br>
             Entities: <span style="color:#0ff">${engine.entities.length}</span> |
-            Origin: <span style="color:#0ff">${engine.initialState}</span><br>
-            Interactions/Tick: <span style="color:#0ff">${engine.interactionsPerTick}</span>
+            Trigger: <span style="color:#0ff">${engine.triggerThreshold.toFixed(4)}</span><br>
+            Decay: <span style="color:#0ff">${engine.bondDecay.toFixed(4)}</span> |
+            Bond+: <span style="color:#0ff">${engine.bondIncrement.toFixed(2)}</span><br>
+            Cap: <span style="color:#0ff">${engine.bondCap.toFixed(2)}</span> |
+            Interactions: <span style="color:#0ff">${engine.interactionsPerTick}</span>
         </div>
     `;
-    
+
     // Render the AST Math Strings
     const rulesContainer = document.getElementById('active-rules-container');
     rulesContainer.innerHTML = constantsHtml + engine.rules.map((r, i) => `
         <div style="margin-bottom: 12px; line-height: 1.4;">
-            <strong style="color:#0ff">R${i+1} Trigger:</strong><br> <span style="color:#aaa">${r.triggerStr}</span><br>
-            <strong style="color:#f0f">R${i+1} Effect A:</strong><br> <span style="color:#aaa">a[d] = ${r.effectAStr}</span><br>
-            <strong style="color:#f0f">R${i+1} Effect B:</strong><br> <span style="color:#aaa">b[d] = ${r.effectBStr}</span>
+            <strong style="color:#0ff">R${i + 1} Trigger:</strong><br> <span style="color:#aaa">${r.triggerStr}</span><br>
+            <strong style="color:#f0f">R${i + 1} Effect A:</strong><br> <span style="color:#aaa">a[d] ${r.assignA} ${r.effectAStr}</span><br>
+            <strong style="color:#f0f">R${i + 1} Effect B:</strong><br> <span style="color:#aaa">b[d] ${r.assignB} ${r.effectBStr}</span>
         </div>
     `).join('');
 
@@ -482,16 +528,16 @@ function startUniverse(config = null) {
     const positions = new Float32Array(engine.entities.length * 3);
     const colors = new Float32Array(engine.entities.length * 3);
     const sizes = new Float32Array(engine.entities.length);
-    
-    for(let i=0; i<engine.entities.length; i++) {
+
+    for (let i = 0; i < engine.entities.length; i++) {
         let s = engine.entities[i].states;
-        positions[i*3] = (s[0] || 0) * 30;
-        positions[i*3+1] = (s[1] || 0) * 30;
-        positions[i*3+2] = (s[2] || 0) * 30;
-        colors[i*3] = 0.5; colors[i*3+1] = 0.5; colors[i*3+2] = 0.5;
+        positions[i * 3] = (s[0] || 0) * 30;
+        positions[i * 3 + 1] = (s[1] || 0) * 30;
+        positions[i * 3 + 2] = (s[2] || 0) * 30;
+        colors[i * 3] = 0.5; colors[i * 3 + 1] = 0.5; colors[i * 3 + 2] = 0.5;
         sizes[i] = 1.0;
     }
-    
+
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
@@ -533,7 +579,7 @@ function startUniverse(config = null) {
     });
     particleSystem = new THREE.Points(geometry, material);
     scene.add(particleSystem);
-    
+
     renderArchive();
 }
 
@@ -559,7 +605,7 @@ document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement === document.body) {
         yaw -= e.movementX * 0.002;
         pitch -= e.movementY * 0.002;
-        pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+        pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
     }
 });
 
@@ -612,15 +658,15 @@ function animate() {
         // God System Auto-Restart & Auto-Save
         if (status === "DEAD") {
             document.getElementById('status-banner').innerText = "WIPING DEAD UNIVERSE...";
-            startUniverse(); 
+            startUniverse();
             return;
         } else if (status === "ALIVE") {
             document.getElementById('status-banner').innerText = "LIFE ARCHIVED! Mining next universe...";
             document.getElementById('status-banner').style.color = "#0f0";
             document.getElementById('status-banner').style.borderColor = "#0f0";
-            
+
             if (!autoSaved) {
-                saveCurrentUniverse(); 
+                saveCurrentUniverse();
                 autoSaved = true;
             }
             startUniverse(); // IMMEDIATELY CONTINUE MINING
@@ -656,19 +702,19 @@ function animate() {
         let ent = engine.entities[i];
         let states = ent.states;
         // Project using the 3 most interesting dimensions
-        positions[i*3]   = (states[dX] || 0) * SPACE_SCALE;
-        positions[i*3+1] = (states[dY] || 0) * SPACE_SCALE;
-        positions[i*3+2] = (states[dZ] || 0) * SPACE_SCALE;
-        
+        positions[i * 3] = (states[dX] || 0) * SPACE_SCALE;
+        positions[i * 3 + 1] = (states[dY] || 0) * SPACE_SCALE;
+        positions[i * 3 + 2] = (states[dZ] || 0) * SPACE_SCALE;
+
         // Color from higher dimensions (use whichever dims are NOT used for position)
         let colorDims = [];
         for (let cd = 0; cd < engine.D; cd++) {
             if (cd !== dX && cd !== dY && cd !== dZ) colorDims.push(cd);
         }
-        colors[i*3]   = colorDims[0] !== undefined ? (states[colorDims[0]]+1)/2 : 0.2;
-        colors[i*3+1] = colorDims[1] !== undefined ? (states[colorDims[1]]+1)/2 : 0.5;
-        colors[i*3+2] = colorDims[2] !== undefined ? (states[colorDims[2]]+1)/2 : 0.8;
-        
+        colors[i * 3] = colorDims[0] !== undefined ? (states[colorDims[0]] + 1) / 2 : 0.2;
+        colors[i * 3 + 1] = colorDims[1] !== undefined ? (states[colorDims[1]] + 1) / 2 : 0.5;
+        colors[i * 3 + 2] = colorDims[2] !== undefined ? (states[colorDims[2]] + 1) / 2 : 0.8;
+
         // Dynamic particle size based on bond count (more bonds = bigger = more visible)
         let bondCount = Object.keys(ent.bonds).length;
         sizes[i] = bondCount > 0 ? (1.0 + bondCount * 0.5) : 0.0;
@@ -679,9 +725,9 @@ function animate() {
 
     // Render Event Lines — THROTTLED: only top N strongest interactions
     // Fade existing lines (4x faster than before)
-    for(let line of activeLines) {
+    for (let line of activeLines) {
         line.material.opacity -= 0.2;
-        if(line.material.opacity <= 0) {
+        if (line.material.opacity <= 0) {
             scene.remove(line);
             line.geometry.dispose();
             if (line.material) line.material.dispose();
@@ -702,8 +748,8 @@ function animate() {
     }
 
     for (let [entA, entB] of sortedEvents) {
-        let p1 = new THREE.Vector3(entA.states[dX]*SPACE_SCALE, entA.states[dY]*SPACE_SCALE, (entA.states[dZ]||0)*SPACE_SCALE);
-        let p2 = new THREE.Vector3(entB.states[dX]*SPACE_SCALE, entB.states[dY]*SPACE_SCALE, (entB.states[dZ]||0)*SPACE_SCALE);
+        let p1 = new THREE.Vector3(entA.states[dX] * SPACE_SCALE, entA.states[dY] * SPACE_SCALE, (entA.states[dZ] || 0) * SPACE_SCALE);
+        let p2 = new THREE.Vector3(entB.states[dX] * SPACE_SCALE, entB.states[dY] * SPACE_SCALE, (entB.states[dZ] || 0) * SPACE_SCALE);
         let lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         let line = new THREE.Line(lineGeo, eventMaterial.clone());
         scene.add(line);
