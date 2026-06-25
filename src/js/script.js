@@ -48,6 +48,9 @@ class VoidEngine {
             this.boundaryMode = config.boundaryMode || 'tanh';
             this.topology = config.topology || 'global';
             this.initialState = config.initialState || 'chaos';
+            this.dimStr = config.dimStr || 'D';
+            this.dimFunc = new Function("D", "events", "age", `return Math.max(3, Math.min(15, Math.floor(Math.abs(${this.dimStr}))));`);
+            
             // Compile saved string formulas back into native JS functions
             this.rules = config.rules.map(r => ({
                 triggerStr: r.triggerStr,
@@ -76,6 +79,11 @@ class VoidEngine {
             
             // Initial State: chaos (scattered) vs singularity (Big Bang from exactly 0)
             this.initialState = Math.random() > 0.5 ? 'chaos' : 'singularity';
+            
+            // AST-Driven Dimensional Emergence
+            let dimVars = ["D", "events", "age", "(events/age)", "(age%10)"];
+            this.dimStr = generateMath(3, dimVars);
+            this.dimFunc = new Function("D", "events", "age", `return Math.max(3, Math.min(15, Math.floor(Math.abs(${this.dimStr}))));`);
             
             // Build the variable pools available to the AST Generator
             let triggerVars = [];
@@ -129,6 +137,29 @@ class VoidEngine {
     tick() {
         this.age++;
         this.events = [];
+        
+        // AST-Driven Dimensional Emergence (Every 50 ticks)
+        if (this.age > 0 && this.age % 50 === 0) {
+            try {
+                let newD = this.dimFunc(this.D, this.totalEvents, this.age);
+                if (!isNaN(newD) && newD !== this.D) {
+                    if (newD > this.D) {
+                        // Expand spatial dimensions
+                        for (let ent of this.entities) {
+                            while (ent.states.length < newD) ent.states.push(0.0);
+                        }
+                    } else {
+                        // Collapse spatial dimensions
+                        for (let ent of this.entities) {
+                            ent.states.length = newD;
+                        }
+                    }
+                    this.D = newD;
+                }
+            } catch (e) {
+                // If dimensional math explodes, ignore it
+            }
+        }
 
         // 1. Mutate states & Decay Bonds (using THIS universe's constants)
         for (let ent of this.entities) {
@@ -244,22 +275,49 @@ class VoidEngine {
                 // Snapshots for Time-Based check
                 if (this.age === 400) {
                     this.history_variance = avgVariance;
-                    this.history_bonds = strongBonds;
+                    
+                    // Track microscopic bond persistence
+                    this.history_bond_set = new Set();
+                    for (let ent of this.entities) {
+                        for (let partner in ent.bonds) {
+                            if (ent.bonds[partner] > this.bondCap * 0.8) {
+                                let edgeId = ent.id < partner ? `${ent.id}-${partner}` : `${partner}-${ent.id}`;
+                                this.history_bond_set.add(edgeId);
+                            }
+                        }
+                    }
                     return null; // Keep waiting
                 }
 
                 if (this.age === 500) {
-                    // Compare 500 vs 400
                     let varianceDelta = Math.abs(avgVariance - this.history_variance);
-                    let bondsDelta = Math.abs(strongBonds - this.history_bonds);
+                    
+                    // Calculate Microscopic Bond Persistence
+                    let persistentBonds = 0;
+                    let currentBonds = new Set();
+                    for (let ent of this.entities) {
+                        for (let partner in ent.bonds) {
+                            if (ent.bonds[partner] > this.bondCap * 0.8) {
+                                let edgeId = ent.id < partner ? `${ent.id}-${partner}` : `${partner}-${ent.id}`;
+                                currentBonds.add(edgeId);
+                            }
+                        }
+                    }
+                    for (let edge of currentBonds) {
+                        if (this.history_bond_set.has(edge)) persistentBonds++;
+                    }
+                    let oldTotal = this.history_bond_set.size;
+                    let persistenceRatio = oldTotal > 0 ? (persistentBonds / oldTotal) : 0;
 
-                    // --- THE VERDICT (v0.5 - The Ultimate Filter) ---
+                    // --- THE VERDICT (v0.6 - Microscopic Persistence Filter) ---
                     
                     // 1. Crystal Check (Frozen)
-                    if (varianceDelta < 0.001 && bondsDelta < 2) return "DEAD"; 
+                    // If 98%+ of bonds persisted and variance barely moved, it's a dead crystal.
+                    if (persistenceRatio > 0.98 && varianceDelta < 0.005) return "DEAD"; 
                     
                     // 2. Gas Check (Chaotic Noise)
-                    if (varianceDelta > 0.5) return "DEAD"; 
+                    // If less than 20% of bonds persisted, the structure is constantly dissolving. Pure noise.
+                    if (persistenceRatio < 0.20) return "DEAD"; 
                     
                     // 3. Network Volume Check
                     let minAllowedBonds = this.entities.length * 0.01; 
@@ -267,8 +325,6 @@ class VoidEngine {
                     if (strongBonds < minAllowedBonds || strongBonds > maxAllowedBonds) return "DEAD";
                     
                     // 4. Scale-Free / Complexity Check
-                    // If the most connected particle has fewer than 3 bonds, it's just strings/pairs
-                    // If it has > 25% of all bonds, it's a monolithic black hole
                     if (maxDegree < 3 || maxDegree > this.entities.length * 0.25) return "DEAD";
 
                     // 5. Dimensionality Check
@@ -317,6 +373,7 @@ function saveCurrentUniverse() {
         boundaryMode: engine.boundaryMode,
         topology: engine.topology,
         initialState: engine.initialState,
+        dimStr: engine.dimStr,
         entityCount: engine.entities.length,
         rules: engine.rules.map(r => ({
             triggerStr: r.triggerStr,
@@ -459,7 +516,9 @@ function startUniverse(config = null) {
             Decay: <span style="color:#0ff">${engine.bondDecay.toFixed(4)}</span><br>
             Bond+: <span style="color:#0ff">${engine.bondIncrement.toFixed(2)}</span> |
             Cap: <span style="color:#0ff">${engine.bondCap.toFixed(2)}</span> |
-            Interactions: <span style="color:#0ff">${engine.interactionsPerTick}</span>
+            Interactions: <span style="color:#0ff">${engine.interactionsPerTick}</span><br>
+            <strong style="color:#f0f; margin-top:5px; display:block;">Dimensional Math (D):</strong>
+            <span style="color:#aaa;">D = Math.floor(| ${engine.dimStr} |)</span>
         </div>
     `;
     
