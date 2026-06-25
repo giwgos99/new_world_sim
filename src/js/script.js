@@ -3,7 +3,11 @@
 // ==========================================
 function generateMath(depth, vars) {
     if (depth <= 0 || Math.random() < 0.25) {
-        if (Math.random() < 0.4) return (Math.random() * 2 - 1).toFixed(3); // Random constant
+        if (Math.random() < 0.4) {
+            let sign = Math.random() < 0.5 ? 1 : -1;
+            let exp = Math.random() * 10 - 5; // Allows constants from 0.00001 up to 100,000
+            return (sign * Math.pow(10, exp)).toFixed(4); 
+        }
         return vars[Math.floor(Math.random() * vars.length)]; // Random variable
     }
     // The math is now fully chaotic. No safety nets. Division, powers, and logs allowed.
@@ -40,12 +44,7 @@ class VoidEngine {
         if (config && config.rules) {
             this.D = config.D;
             // Restore Universal Constants from saved config
-            this.thermalWander = config.thermalWander || 0.02;
-            this.bondDecay = config.bondDecay || 0.01;
-            this.bondIncrement = config.bondIncrement || 0.5;
-            this.bondCap = config.bondCap || 1.0;
             this.interactionsPerTick = config.interactionsPerTick || 400;
-            this.topology = config.topology || 'global';
             this.initialState = config.initialState || 'chaos';
             
             // Compile saved string formulas back into native JS functions
@@ -62,13 +61,7 @@ class VoidEngine {
             
             // --- RANDOMIZED UNIVERSAL CONSTANTS ---
             // These are the ONLY hardcoded scaffolding. Each universe gets random values.
-            this.bondDecay = Math.random() * 0.03 + 0.005;       // 0.005 to 0.035
-            this.bondIncrement = Math.random() * 0.8 + 0.2;      // 0.2 to 1.0
-            this.bondCap = Math.random() * 1.5 + 0.5;            // 0.5 to 2.0
-            this.interactionsPerTick = Math.floor(Math.random() * 400) + 100; // 100 to 500
-            
-            // Interaction topology: global (any particle) vs network (bias towards bonded partners)
-            this.topology = Math.random() > 0.5 ? 'global' : 'network';
+            this.interactionsPerTick = Math.floor(Math.random() * 900) + 100; // 100 to 1000
             
             // Initial State: chaos (scattered) vs singularity (Big Bang from exactly 0)
             this.initialState = Math.random() > 0.5 ? 'chaos' : 'singularity';
@@ -126,10 +119,10 @@ class VoidEngine {
         this.age++;
         this.events = [];
 
-        // 1. Decay Bonds (using THIS universe's constants)
+        // 1. Decay Bonds (The Tracer Dye for the Observer Screen)
         for (let ent of this.entities) {
             for (let partnerId in ent.bonds) {
-                ent.bonds[partnerId] -= this.bondDecay;
+                ent.bonds[partnerId] -= 0.01; // OBS_BOND_DECAY
                 if (ent.bonds[partnerId] <= 0) delete ent.bonds[partnerId];
             }
         }
@@ -137,19 +130,10 @@ class VoidEngine {
         // 2. Physics Interactions: Using pure AST Generated Math!
         for (let i = 0; i < this.interactionsPerTick; i++) {
             let idxA = Math.floor(Math.random() * this.entities.length);
-            let entA = this.entities[idxA];
-            
-            let idxB;
-            // Network Topology: 70% chance to interact with someone you already know
-            if (this.topology === 'network' && Math.random() < 0.7 && Object.keys(entA.bonds).length > 0) {
-                let partners = Object.keys(entA.bonds);
-                idxB = parseInt(partners[Math.floor(Math.random() * partners.length)]);
-            } else {
-                idxB = Math.floor(Math.random() * this.entities.length);
-            }
-            
+            let idxB = Math.floor(Math.random() * this.entities.length);
             if (idxA === idxB) continue;
-
+            
+            let entA = this.entities[idxA];
             let entB = this.entities[idxB];
             let triggered = false;
 
@@ -311,15 +295,10 @@ function saveCurrentUniverse() {
     let saved = JSON.parse(localStorage.getItem('voidArchive')) || [];
     let config = {
         id: Date.now(),
-        name: `AST Void D${engine.D} [${engine.boundaryMode}] Bonds:${engine.getActiveBondCount()}`,
+        name: `AST Void D${engine.D} Bonds:${engine.getActiveBondCount()}`,
         D: engine.D,
         // Save Universal Constants so the universe can be perfectly reproduced
-        thermalWander: engine.thermalWander,
-        bondDecay: engine.bondDecay,
-        bondIncrement: engine.bondIncrement,
-        bondCap: engine.bondCap,
         interactionsPerTick: engine.interactionsPerTick,
-        topology: engine.topology,
         initialState: engine.initialState,
         entityCount: engine.entities.length,
         rules: engine.rules.map(r => ({
@@ -468,12 +447,8 @@ function startUniverse(config = null) {
         <div style="margin: 8px 0; padding: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); font-size: 10px; line-height: 1.6;">
             <strong style="color:#ff0">Universal Constants:</strong><br>
             Entities: <span style="color:#0ff">${engine.entities.length}</span> |
-            Topology: <span style="color:#0ff">${engine.topology}</span><br>
             Origin: <span style="color:#0ff">${engine.initialState}</span><br>
-            Decay: <span style="color:#0ff">${engine.bondDecay.toFixed(4)}</span> |
-            Bond+: <span style="color:#0ff">${engine.bondIncrement.toFixed(2)}</span><br>
-            Cap: <span style="color:#0ff">${engine.bondCap.toFixed(2)}</span> |
-            Interactions: <span style="color:#0ff">${engine.interactionsPerTick}</span>
+            Interactions/Tick: <span style="color:#0ff">${engine.interactionsPerTick}</span>
         </div>
     `;
     
