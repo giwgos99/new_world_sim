@@ -52,9 +52,6 @@ class VoidEngine {
             this.D = config.D;
             this.astConfig = config.astConfig || { triggerDepth: 4, effectDepth: 3 }; // Fallback for older saves
             // Restore Universal Constants from saved config
-            this.bondDecay = config.bondDecay || 0.01;
-            this.bondIncrement = config.bondIncrement || 0.5;
-            this.bondCap = config.bondCap || 1.0;
             this.interactionsPerTick = config.interactionsPerTick || 400;
             this.triggerThreshold = config.triggerThreshold || 0.5;
 
@@ -104,9 +101,6 @@ class VoidEngine {
             };
 
             // --- RANDOMIZED UNIVERSAL CONSTANTS ---
-            this.bondDecay = Math.random() * 0.03 + 0.005;       // 0.005 to 0.035
-            this.bondIncrement = Math.random() * 0.8 + 0.2;      // 0.2 to 1.0
-            this.bondCap = Math.random() * 1.5 + 0.5;            // 0.5 to 2.0
             this.interactionsPerTick = Math.floor(Math.random() * 400) + 100; // 100 to 500
             this.triggerThreshold = Math.random() * 2 - 1;       // -1.0 to 1.0
 
@@ -182,7 +176,7 @@ class VoidEngine {
             for (let d = 0; d < this.D; d++) {
                 states.push(Math.random() * 2 - 1);
             }
-            this.entities.push({ id: i, states: states, bonds: {} });
+            this.entities.push({ id: i, states: states });
         }
     }
 
@@ -190,15 +184,7 @@ class VoidEngine {
         this.age++;
         this.events = [];
 
-        // 1. Decay Bonds (using THIS universe's constants)
-        for (let ent of this.entities) {
-            for (let partnerId in ent.bonds) {
-                ent.bonds[partnerId] -= this.bondDecay;
-                if (ent.bonds[partnerId] <= 0) delete ent.bonds[partnerId];
-            }
-        }
-
-        // 2. Physics Interactions: Using pure AST Generated Math!
+        // 1. Physics Interactions: Using pure AST Generated Math!
         for (let i = 0; i < this.interactionsPerTick; i++) {
             let idxA = Math.floor(Math.random() * this.entities.length);
             let idxB = Math.floor(Math.random() * this.entities.length);
@@ -221,138 +207,82 @@ class VoidEngine {
             if (triggered) {
                 this.events.push([entA, entB]);
                 this.totalEvents++;
-                entA.bonds[entB.id] = (entA.bonds[entB.id] || 0) + this.bondIncrement;
-                entB.bonds[entA.id] = (entB.bonds[entA.id] || 0) + this.bondIncrement;
-                if (entA.bonds[entB.id] > this.bondCap) entA.bonds[entB.id] = this.bondCap;
-                if (entB.bonds[entA.id] > this.bondCap) entB.bonds[entA.id] = this.bondCap;
             }
         }
 
-        // 3. God System Evaluation (The Edge of Chaos) — v0.5 Ultimate Filter
+        // 2. God System Evaluation (The Edge of Chaos) — v0.7 Mathematical Filter
         if (!this.isStable) {
             if (this.age === 400 || this.age === 500) {
 
-                // --- BOND COUNT & NETWORK TOPOLOGY ---
-                let strongBonds = 0;
-                let maxDegree = 0;
-                for (let ent of this.entities) {
-                    let degree = 0;
-                    for (let partner in ent.bonds) {
-                        if (ent.bonds[partner] > this.bondCap * 0.8) {
-                            strongBonds++;
-                            degree++;
-                        }
-                    }
-                    if (degree > maxDegree) maxDegree = degree;
-                }
-                strongBonds = Math.floor(strongBonds / 2);
-
-                // --- MULTI-DIMENSIONAL VARIANCE ---
+                // --- GLOBAL VARIANCE & DIMENSIONAL DIVERGENCE ---
                 let diverseDims = 0;
                 let totalVariance = 0;
+                let dimVariances = [];
                 for (let d = 0; d < this.D; d++) {
                     let sum = 0;
-                    for (let ent of this.entities) sum += ent.states[d];
+                    for (let ent of this.entities) sum += (ent.states[d] || 0);
                     let avg = sum / this.entities.length;
                     let dimVar = 0;
-                    for (let ent of this.entities) dimVar += Math.pow(ent.states[d] - avg, 2);
+                    for (let ent of this.entities) dimVar += Math.pow((ent.states[d] || 0) - avg, 2);
                     dimVar /= this.entities.length;
+                    dimVariances.push(dimVar);
                     totalVariance += dimVar;
                     if (dimVar > 0.1) diverseDims++;
                 }
                 let avgVariance = totalVariance / this.D;
 
-                // --- SPATIAL DISTRIBUTION CHECK ---
-                let spreadAxes = 0;
-                for (let d = 0; d < this.D; d++) {
-                    let minV = Infinity, maxV = -Infinity;
-                    for (let ent of this.entities) {
-                        if (ent.states[d] < minV) minV = ent.states[d];
-                        if (ent.states[d] > maxV) maxV = ent.states[d];
-                    }
-                    if ((maxV - minV) > 0.5) spreadAxes++;
-                }
-
-                if (isNaN(avgVariance)) return "DEAD";
+                if (isNaN(avgVariance) || avgVariance === Infinity) return "DEAD";
 
                 // Snapshots for Time-Based check
                 if (this.age === 400) {
                     this.history_variance = avgVariance;
-
-                    // Track microscopic bond persistence
-                    this.history_bond_set = new Set();
-                    for (let ent of this.entities) {
-                        for (let partner in ent.bonds) {
-                            if (ent.bonds[partner] > this.bondCap * 0.8) {
-                                let edgeId = ent.id < partner ? `${ent.id}-${partner}` : `${partner}-${ent.id}`;
-                                this.history_bond_set.add(edgeId);
-                            }
-                        }
-                    }
+                    this.history_states = this.entities.map(e => e.states.slice());
                     return null; // Keep waiting
                 }
 
                 if (this.age === 500) {
                     let varianceDelta = Math.abs(avgVariance - this.history_variance);
+                    let varianceRatio = this.history_variance > 0 ? (varianceDelta / this.history_variance) : 0;
 
-                    // Calculate Microscopic Bond Persistence
-                    let persistentBonds = 0;
-                    let currentBonds = new Set();
-                    for (let ent of this.entities) {
-                        for (let partner in ent.bonds) {
-                            if (ent.bonds[partner] > this.bondCap * 0.8) {
-                                let edgeId = ent.id < partner ? `${ent.id}-${partner}` : `${partner}-${ent.id}`;
-                                currentBonds.add(edgeId);
-                            }
+                    // Micro-fluidity check
+                    let totalMovement = 0;
+                    for (let i = 0; i < this.entities.length; i++) {
+                        let ent = this.entities[i];
+                        let oldStates = this.history_states[i];
+                        let distSq = 0;
+                        for (let d = 0; d < this.D; d++) {
+                            distSq += Math.pow((ent.states[d] || 0) - (oldStates[d] || 0), 2);
                         }
+                        totalMovement += Math.sqrt(distSq);
                     }
-                    for (let edge of currentBonds) {
-                        if (this.history_bond_set.has(edge)) persistentBonds++;
-                    }
-                    let oldTotal = this.history_bond_set.size;
-                    let persistenceRatio = oldTotal > 0 ? (persistentBonds / oldTotal) : 0;
+                    let avgMovement = totalMovement / this.entities.length;
 
-                    // --- THE VERDICT (v0.6 - Microscopic Persistence Filter) ---
+                    // --- THE VERDICT ---
+                    
+                    // 1. Not Exploded / Not Collapsed
+                    if (avgVariance < 0.001 || avgVariance > 100000) return "DEAD";
+                    
+                    // 2. Macro-Stability (Is it blowing up or collapsing rapidly?)
+                    // Global volume shouldn't change by more than 50% in 100 ticks.
+                    if (varianceRatio > 0.5) return "DEAD";
 
-                    // 1. Crystal Check (Frozen)
-                    // If 98%+ of bonds persisted and variance barely moved, it's a dead crystal.
-                    if (persistenceRatio > 0.98 && varianceDelta < 0.005) return "DEAD";
+                    // 3. Micro-Fluidity (Are things actually moving?)
+                    // If average particle moved less than 0.01 units in 100 ticks, it's a frozen crystal.
+                    if (avgMovement < 0.01) return "DEAD";
 
-                    // 2. Gas Check (Chaotic Noise)
-                    // If less than 20% of bonds persisted, the structure is constantly dissolving. Pure noise.
-                    if (persistenceRatio < 0.20) return "DEAD";
-
-                    // 3. Network Volume Check
-                    let minAllowedBonds = this.entities.length * 0.01;
-                    let maxAllowedBonds = this.entities.length * 0.5;
-                    if (strongBonds < minAllowedBonds || strongBonds > maxAllowedBonds) return "DEAD";
-
-                    // 4. Scale-Free / Complexity Check
-                    if (maxDegree < 3 || maxDegree > this.entities.length * 0.25) return "DEAD";
-
-                    // 5. Dimensionality Check — at least 2 active dimensions and some structure
-                    if (diverseDims < 2 || avgVariance < 0.01) return "DEAD";
-                    if (spreadAxes < 2) return "DEAD";
+                    // 4. Dimensional Complexity
+                    // At least 2 dimensions must have meaningful variance, so it's not just a 1D line.
+                    if (diverseDims < 2) return "DEAD";
 
                     this.isStable = true;
                 }
             } else if (this.age > 500) {
-                // If it wasn't stable by 500, kill it (shouldn't reach here if verdict worked)
+                // If it wasn't stable by 500, kill it
                 if (!this.isStable) return "DEAD";
             }
         }
 
         return this.isStable ? "ALIVE" : "EVALUATING";
-    }
-
-    getActiveBondCount() {
-        let count = 0;
-        for (let ent of this.entities) {
-            for (let partner in ent.bonds) {
-                if (ent.bonds[partner] > 0.5) count++;
-            }
-        }
-        return Math.floor(count / 2);
     }
 }
 
@@ -365,12 +295,9 @@ function saveCurrentUniverse() {
     let saved = JSON.parse(localStorage.getItem('voidArchive')) || [];
     let config = {
         id: Date.now(),
-        name: `AST Void D${engine.D} Bonds:${engine.getActiveBondCount()}`,
+        name: `AST Void D${engine.D} Entities:${engine.entities.length}`,
         D: engine.D,
         astConfig: engine.astConfig,
-        bondDecay: engine.bondDecay,
-        bondIncrement: engine.bondIncrement,
-        bondCap: engine.bondCap,
         interactionsPerTick: engine.interactionsPerTick,
         triggerThreshold: engine.triggerThreshold,
         entityCount: engine.entities.length,
@@ -525,10 +452,7 @@ function startUniverse(config = null) {
             <strong style="color:#ff0">Universal Constants:</strong><br>
             Entities: <span style="color:#0ff">${engine.entities.length}</span> |
             Trigger: <span style="color:#0ff">${engine.triggerThreshold.toFixed(4)}</span><br>
-            Decay: <span style="color:#0ff">${engine.bondDecay.toFixed(4)}</span> |
-            Bond+: <span style="color:#0ff">${engine.bondIncrement.toFixed(2)}</span><br>
-            Cap: <span style="color:#0ff">${engine.bondCap.toFixed(2)}</span> |
-            Interactions: <span style="color:#0ff">${engine.interactionsPerTick}</span>
+            Interactions/Tick: <span style="color:#0ff">${engine.interactionsPerTick}</span>
         </div>
     `;
 
@@ -732,7 +656,7 @@ function animate() {
 
     // UI Updates
     document.getElementById('event-count').innerText = engine.totalEvents;
-    document.getElementById('bond-count').innerText = engine.getActiveBondCount();
+    document.getElementById('variance-count').innerText = engine.history_variance ? engine.history_variance.toFixed(3) : "Evaluating...";
     document.getElementById('void-age').innerText = engine.age;
 
     // Auto-update projection every 60 frames to find best viewing dimensions
@@ -762,9 +686,15 @@ function animate() {
         colors[i * 3 + 1] = colorDims[1] !== undefined ? (states[colorDims[1]] + 1) / 2 : 0.5;
         colors[i * 3 + 2] = colorDims[2] !== undefined ? (states[colorDims[2]] + 1) / 2 : 0.8;
 
-        // Dynamic particle size based on bond count (more bonds = bigger = more visible)
-        let bondCount = Object.keys(ent.bonds).length;
-        sizes[i] = bondCount > 0 ? (1.0 + bondCount * 0.5) : 0.0;
+        // Dynamic particle size based on mathematical "Energy" (magnitude of its states)
+        let energySq = 0;
+        for (let d = 0; d < engine.D; d++) {
+            energySq += Math.pow(states[d] || 0, 2);
+        }
+        let energy = Math.sqrt(energySq);
+        
+        // Particles with near-zero energy disappear into the void
+        sizes[i] = energy > 0.1 ? Math.min(energy, 5.0) : 0.0;
     }
     particleSystem.geometry.attributes.position.needsUpdate = true;
     particleSystem.geometry.attributes.color.needsUpdate = true;
@@ -785,13 +715,8 @@ function animate() {
     // Only render the top maxEventLines interactions (by bond strength)
     let sortedEvents = engine.events.slice();
     if (sortedEvents.length > maxEventLines) {
-        // Score each event by the bond strength between the two entities
-        sortedEvents.sort((a, b) => {
-            let strengthA = (a[0].bonds[a[1].id] || 0);
-            let strengthB = (b[0].bonds[b[1].id] || 0);
-            return strengthB - strengthA;
-        });
-        sortedEvents = sortedEvents.slice(0, maxEventLines);
+        // Just take the most recent events
+        sortedEvents = sortedEvents.slice(-maxEventLines);
     }
 
     for (let [entA, entB] of sortedEvents) {
