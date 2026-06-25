@@ -210,101 +210,132 @@ class VoidEngine {
             }
         }
 
-        // 2. God System Evaluation (The Edge of Chaos) — v0.8 Hardened Filter
-        if (!this.isStable) {
-            if (this.age === 600 || this.age === 800 || this.age === 1500) {
+        // 2. God System v0.9 — Unbiased Emergence Filter
+        //    No absolute scale thresholds. Only structural/relational tests.
+        const GOD_SNAPS = [300, 600, 900, 1200, 1500];
 
-                // --- GLOBAL VARIANCE & DIMENSIONAL DIVERGENCE ---
-                let diverseDims = 0;
-                let totalVariance = 0;
-                for (let d = 0; d < this.D; d++) {
-                    let sum = 0;
-                    for (let ent of this.entities) sum += (ent.states[d] || 0);
-                    let avg = sum / this.entities.length;
-                    let dimVar = 0;
-                    for (let ent of this.entities) dimVar += Math.pow((ent.states[d] || 0) - avg, 2);
-                    dimVar /= this.entities.length;
-                    totalVariance += dimVar;
-                    if (dimVar > 0.15) diverseDims++; // Stricter: was 0.1
-                }
-                let avgVariance = totalVariance / this.D;
+        if (!this.isStable && GOD_SNAPS.includes(this.age)) {
 
-                if (isNaN(avgVariance) || avgVariance === Infinity) return "DEAD";
-
-                // Phase 1: Snapshot at tick 600 — baseline for comparison
-                if (this.age === 600) {
-                    this.history_variance = avgVariance;
-                    this.history_states = this.entities.map(e => e.states.slice());
-                    return null; // Keep waiting
-                }
-
-                // Phase 2: First real checkpoint at tick 800 (200-tick window)
-                if (this.age === 800) {
-                    let varianceDelta = Math.abs(avgVariance - this.history_variance);
-                    let varianceRatio = this.history_variance > 0 ? (varianceDelta / this.history_variance) : 0;
-
-                    let totalMovement = 0;
-                    for (let i = 0; i < this.entities.length; i++) {
-                        let ent = this.entities[i];
-                        let oldStates = this.history_states[i];
-                        let distSq = 0;
-                        for (let d = 0; d < this.D; d++) {
-                            distSq += Math.pow((ent.states[d] || 0) - (oldStates[d] || 0), 2);
-                        }
-                        totalMovement += Math.sqrt(distSq);
-                    }
-                    let avgMovement = totalMovement / this.entities.length;
-
-                    // --- FIRST VERDICT ---
-                    // 1. Not Exploded / Not Collapsed
-                    if (avgVariance < 0.005 || avgVariance > 100000) return "DEAD";
-
-                    // 2. Macro-Stability — must not swing more than 25% in 200 ticks (was 50%)
-                    if (varianceRatio > 0.25) return "DEAD";
-
-                    // 3. Micro-Fluidity — must be genuinely dynamic (raised from 0.01)
-                    if (avgMovement < 0.05) return "DEAD";
-
-                    // 4. Dimensional Complexity — at least 3 active dims (was 2)
-                    if (diverseDims < 3) return "DEAD";
-
-                    // Passed phase 1 — now take a new snapshot and wait for phase 2
-                    this.history_variance = avgVariance;
-                    this.history_states = this.entities.map(e => e.states.slice());
-                    return null; // Keep evaluating
-                }
-
-                // Phase 3: Second survival checkpoint at tick 1500 — prove long-term stability
-                if (this.age === 1500) {
-                    let varianceDelta = Math.abs(avgVariance - this.history_variance);
-                    let varianceRatio = this.history_variance > 0 ? (varianceDelta / this.history_variance) : 0;
-
-                    let totalMovement = 0;
-                    for (let i = 0; i < this.entities.length; i++) {
-                        let ent = this.entities[i];
-                        let oldStates = this.history_states[i];
-                        let distSq = 0;
-                        for (let d = 0; d < this.D; d++) {
-                            distSq += Math.pow((ent.states[d] || 0) - (oldStates[d] || 0), 2);
-                        }
-                        totalMovement += Math.sqrt(distSq);
-                    }
-                    let avgMovement = totalMovement / this.entities.length;
-
-                    // --- FINAL VERDICT ---
-                    // Same thresholds — but now over a 700-tick window (600-1500)
-                    if (avgVariance < 0.005 || avgVariance > 100000) return "DEAD";
-                    if (varianceRatio > 0.25) return "DEAD";
-                    if (avgMovement < 0.05) return "DEAD";
-                    if (diverseDims < 3) return "DEAD";
-
-                    // Survived everything. This universe is genuinely alive.
-                    this.isStable = true;
-                }
-            } else if (this.age > 1500) {
-                // If it never passed the final check, kill it
-                if (!this.isStable) return "DEAD";
+            // --- COMPUTE VARIANCE PER DIMENSION ---
+            let totalVariance = 0;
+            let dimVariances = [];
+            for (let d = 0; d < this.D; d++) {
+                let sum = 0;
+                for (let ent of this.entities) sum += (ent.states[d] || 0);
+                let avg = sum / this.entities.length;
+                let dv = 0;
+                for (let ent of this.entities) dv += Math.pow((ent.states[d] || 0) - avg, 2);
+                dv /= this.entities.length;
+                dimVariances.push(dv);
+                totalVariance += dv;
             }
+            let avgVariance = totalVariance / this.D;
+
+            // --- IMMEDIATE KILLS (truly absolute — not opinions) ---
+            if (isNaN(avgVariance) || !isFinite(avgVariance)) {
+                this.godVerdict = "NaN/Overflow";
+                return "DEAD";
+            }
+            if (avgVariance < 1e-10) {
+                this.godVerdict = "Total Collapse";
+                return "DEAD";
+            }
+
+            // --- MOVEMENT since last snapshot ---
+            let avgMovement = 0;
+            if (this.lastSnapshot) {
+                let totalMove = 0;
+                for (let i = 0; i < this.entities.length; i++) {
+                    let dSq = 0;
+                    for (let d = 0; d < this.D; d++) {
+                        let diff = (this.entities[i].states[d] || 0) - (this.lastSnapshot[i][d] || 0);
+                        dSq += diff * diff;
+                    }
+                    totalMove += Math.sqrt(dSq);
+                }
+                avgMovement = totalMove / this.entities.length;
+            }
+
+            // --- HERFINDAHL INDEX — dimensional concentration ---
+            // effectiveDims = 1 (line) → D (perfectly spread)
+            let herfindahl = 0;
+            for (let dv of dimVariances) {
+                let share = totalVariance > 0 ? dv / totalVariance : 0;
+                herfindahl += share * share;
+            }
+            let effectiveDims = herfindahl > 0 ? (1.0 / herfindahl) : this.D;
+
+            // --- STORE SNAPSHOT ---
+            if (!this.snapVariance)   this.snapVariance = [];
+            if (!this.snapMovement)   this.snapMovement = [];
+            if (!this.snapEffDims)    this.snapEffDims = [];
+            this.snapVariance.push(avgVariance);
+            this.snapMovement.push(avgMovement);
+            this.snapEffDims.push(effectiveDims);
+            this.lastSnapshot = this.entities.map(e => e.states.slice());
+
+            // Keep initial movement as baseline (first snapshot)
+            if (this.age === 300) this.initialMovement = avgMovement;
+
+            // --- FINAL VERDICT at last snapshot ---
+            if (this.age === 1500) {
+
+                // TEST 1: Monotonic variance (purely expanding or purely collapsing)
+                // A universe with internal feedback MUST reverse direction at least once.
+                let allUp = true, allDown = true;
+                for (let i = 1; i < this.snapVariance.length; i++) {
+                    if (this.snapVariance[i] <= this.snapVariance[i-1]) allUp = false;
+                    if (this.snapVariance[i] >= this.snapVariance[i-1]) allDown = false;
+                }
+                if (allUp)   { this.godVerdict = "Monotonic Expansion";  return "DEAD"; }
+                if (allDown) { this.godVerdict = "Monotonic Collapse";    return "DEAD"; }
+
+                // TEST 2: Frozen — movement has dropped to < 1% of its initial value
+                // This is relative — no absolute scale assumption.
+                let latestMove = this.snapMovement[this.snapMovement.length - 1];
+                if (this.initialMovement > 1e-12 && latestMove < this.initialMovement * 0.01) {
+                    this.godVerdict = "Frozen (movement died)";
+                    return "DEAD";
+                }
+                if (latestMove < 1e-12) {
+                    this.godVerdict = "Frozen (zero movement)";
+                    return "DEAD";
+                }
+
+                // TEST 3: Dimensional concentration — line/plane universes
+                // Require at least sqrt(D) effective dimensions (scales naturally with D).
+                let minEffDims = Math.min(this.D, Math.max(2, Math.floor(Math.sqrt(this.D))));
+                let latestEffDims = this.snapEffDims[this.snapEffDims.length - 1];
+                if (latestEffDims < minEffDims) {
+                    this.godVerdict = `Line/Plane (${latestEffDims.toFixed(1)} of ${this.D} eff. dims)`;
+                    return "DEAD";
+                }
+
+                // TEST 4: Dimensional concentration must be consistent — not just a fluke
+                // Check that effective dims stayed above threshold for majority of snapshots
+                let dimFailCount = this.snapEffDims.filter(ed => ed < minEffDims).length;
+                if (dimFailCount >= 3) {
+                    this.godVerdict = `Persistent Line/Plane (${dimFailCount}/5 snaps collapsed)`;
+                    return "DEAD";
+                }
+
+                // TEST 5: Variance must not be trivially uniform (check coefficient of variation)
+                // If variance barely fluctuates across all 5 snapshots, it's a boring attractor
+                let vMean = this.snapVariance.reduce((a,b)=>a+b,0) / this.snapVariance.length;
+                let vStd = Math.sqrt(this.snapVariance.reduce((s,v)=>s+Math.pow(v-vMean,2),0)/this.snapVariance.length);
+                let vCV = vMean > 0 ? vStd / vMean : 0;
+                if (vCV < 0.005) {
+                    this.godVerdict = `Boring Attractor (CV=${vCV.toFixed(4)})`;
+                    return "DEAD";
+                }
+
+                // --- SURVIVED ALL TESTS ---
+                this.godVerdict = `ALIVE (${latestEffDims.toFixed(1)} eff. dims, CV=${vCV.toFixed(3)})`;
+                this.isStable = true;
+            }
+
+        } else if (!this.isStable && this.age > 1500) {
+            return "DEAD";
         }
 
         return this.isStable ? "ALIVE" : "EVALUATING";
@@ -540,7 +571,9 @@ function startUniverse(config = null) {
 
     // Custom shader material for variable-size particles
     const material = new THREE.ShaderMaterial({
-        uniforms: {},
+        uniforms: {
+            u_hideStagnant: { value: 1.0 }
+        },
         vertexShader: `
             attribute float size;
             attribute vec3 color;
@@ -556,16 +589,23 @@ function startUniverse(config = null) {
             }
         `,
         fragmentShader: `
+            uniform float u_hideStagnant;
             varying vec3 vColor;
             varying float vSize;
             void main() {
-                if (vSize < 0.1) discard; // Invisible if 0 bonds
+                if (u_hideStagnant > 0.5 && vSize < 0.1) discard; // Invisible if stagnant
                 
                 // Hard circle with thin soft edge (crisp, not blurry)
                 vec2 center = gl_PointCoord - vec2(0.5);
                 float dist = length(center);
                 if (dist > 0.45) discard;
                 float alpha = 1.0 - smoothstep(0.35, 0.45, dist);
+                
+                // Make stagnant particles very dim if we aren't hiding them
+                if (u_hideStagnant < 0.5 && vSize < 0.1) {
+                    alpha *= 0.2;
+                }
+                
                 gl_FragColor = vec4(vColor, alpha);
             }
         `,
@@ -651,41 +691,55 @@ function animate() {
     }
 
     if (isMining) {
-        // God System Auto-Restart & Auto-Save
         if (status === "DEAD") {
-            document.getElementById('status-banner').innerText = "WIPING DEAD UNIVERSE...";
+            let reason = engine.godVerdict || "Unknown";
+            document.getElementById('status-banner').innerText = `KILLED: ${reason}`;
+            document.getElementById('status-banner').style.color = "#f55";
+            document.getElementById('status-banner').style.borderColor = "#f55";
             startUniverse();
             return;
         } else if (status === "ALIVE") {
-            document.getElementById('status-banner').innerText = "LIFE ARCHIVED! Mining next universe...";
+            document.getElementById('status-banner').innerText = `ARCHIVED: ${engine.godVerdict}`;
             document.getElementById('status-banner').style.color = "#0f0";
             document.getElementById('status-banner').style.borderColor = "#0f0";
-
-            if (!autoSaved) {
-                saveCurrentUniverse();
-                autoSaved = true;
-            }
-            startUniverse(); // IMMEDIATELY CONTINUE MINING
+            if (!autoSaved) { saveCurrentUniverse(); autoSaved = true; }
+            startUniverse();
             return;
+        } else {
+            // Show snapshot progress
+            let snap = engine.snapVariance ? engine.snapVariance.length : 0;
+            let latestV = engine.snapVariance ? engine.snapVariance[snap-1] : null;
+            let latestE = engine.snapEffDims ? engine.snapEffDims[snap-1] : null;
+            let snapStr = snap > 0 ? ` | snap ${snap}/5 | var=${latestV.toFixed(3)} | eff.dims=${latestE ? latestE.toFixed(1) : '?'}` : '';
+            document.getElementById('status-banner').innerText = `EVALUATING (age ${engine.age}${snapStr})`;
+            document.getElementById('status-banner').style.color = "#ff0";
+            document.getElementById('status-banner').style.borderColor = "#ff0";
         }
     } else {
         // Observer Mode
         if (status === "DEAD") {
-            document.getElementById('status-banner').innerText = "OBSERVING: Universe Collapsed";
+            document.getElementById('status-banner').innerText = `DEAD: ${engine.godVerdict || 'Collapsed'}`;
             document.getElementById('status-banner').style.color = "#f00";
+            document.getElementById('status-banner').style.borderColor = "#f00";
         } else if (status === "ALIVE") {
-            document.getElementById('status-banner').innerText = "OBSERVING: Stable Universe";
+            document.getElementById('status-banner').innerText = `STABLE: ${engine.godVerdict}`;
             document.getElementById('status-banner').style.color = "#0f0";
+            document.getElementById('status-banner').style.borderColor = "#0f0";
         }
     }
 
     // UI Updates
     document.getElementById('event-count').innerText = engine.totalEvents;
-    document.getElementById('variance-count').innerText = engine.history_variance ? engine.history_variance.toFixed(3) : "Evaluating...";
+    let latestSnap = engine.snapVariance ? engine.snapVariance[engine.snapVariance.length-1] : null;
+    document.getElementById('variance-count').innerText = latestSnap ? latestSnap.toFixed(4) : "Waiting...";
     document.getElementById('void-age').innerText = engine.age;
 
     // Auto-update projection every 60 frames to find best viewing dimensions
     if (engine.age % 60 === 0) updateProjectionDims();
+    
+    // Update shader uniform for stagnant particle visibility
+    const hideStagnant = document.getElementById('hide-stagnant-checkbox').checked;
+    particleSystem.material.uniforms.u_hideStagnant.value = hideStagnant ? 1.0 : 0.0;
 
     // Update Particles — using auto-projected best dimensions
     const positions = particleSystem.geometry.attributes.position.array;
@@ -718,8 +772,8 @@ function animate() {
         }
         let energy = Math.sqrt(energySq);
         
-        // Particles with near-zero energy disappear into the void
-        sizes[i] = energy > 0.1 ? Math.min(energy, 5.0) : 0.0;
+        // Minimum size so they are visible if we uncheck the hide toggle
+        sizes[i] = energy > 0.1 ? Math.min(energy, 5.0) : 0.05;
     }
     particleSystem.geometry.attributes.position.needsUpdate = true;
     particleSystem.geometry.attributes.color.needsUpdate = true;
