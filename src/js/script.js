@@ -210,14 +210,13 @@ class VoidEngine {
             }
         }
 
-        // 2. God System Evaluation (The Edge of Chaos) — v0.7 Mathematical Filter
+        // 2. God System Evaluation (The Edge of Chaos) — v0.8 Hardened Filter
         if (!this.isStable) {
-            if (this.age === 400 || this.age === 500) {
+            if (this.age === 600 || this.age === 800 || this.age === 1500) {
 
                 // --- GLOBAL VARIANCE & DIMENSIONAL DIVERGENCE ---
                 let diverseDims = 0;
                 let totalVariance = 0;
-                let dimVariances = [];
                 for (let d = 0; d < this.D; d++) {
                     let sum = 0;
                     for (let ent of this.entities) sum += (ent.states[d] || 0);
@@ -225,26 +224,25 @@ class VoidEngine {
                     let dimVar = 0;
                     for (let ent of this.entities) dimVar += Math.pow((ent.states[d] || 0) - avg, 2);
                     dimVar /= this.entities.length;
-                    dimVariances.push(dimVar);
                     totalVariance += dimVar;
-                    if (dimVar > 0.1) diverseDims++;
+                    if (dimVar > 0.15) diverseDims++; // Stricter: was 0.1
                 }
                 let avgVariance = totalVariance / this.D;
 
                 if (isNaN(avgVariance) || avgVariance === Infinity) return "DEAD";
 
-                // Snapshots for Time-Based check
-                if (this.age === 400) {
+                // Phase 1: Snapshot at tick 600 — baseline for comparison
+                if (this.age === 600) {
                     this.history_variance = avgVariance;
                     this.history_states = this.entities.map(e => e.states.slice());
                     return null; // Keep waiting
                 }
 
-                if (this.age === 500) {
+                // Phase 2: First real checkpoint at tick 800 (200-tick window)
+                if (this.age === 800) {
                     let varianceDelta = Math.abs(avgVariance - this.history_variance);
                     let varianceRatio = this.history_variance > 0 ? (varianceDelta / this.history_variance) : 0;
 
-                    // Micro-fluidity check
                     let totalMovement = 0;
                     for (let i = 0; i < this.entities.length; i++) {
                         let ent = this.entities[i];
@@ -257,27 +255,54 @@ class VoidEngine {
                     }
                     let avgMovement = totalMovement / this.entities.length;
 
-                    // --- THE VERDICT ---
-                    
+                    // --- FIRST VERDICT ---
                     // 1. Not Exploded / Not Collapsed
-                    if (avgVariance < 0.001 || avgVariance > 100000) return "DEAD";
-                    
-                    // 2. Macro-Stability (Is it blowing up or collapsing rapidly?)
-                    // Global volume shouldn't change by more than 50% in 100 ticks.
-                    if (varianceRatio > 0.5) return "DEAD";
+                    if (avgVariance < 0.005 || avgVariance > 100000) return "DEAD";
 
-                    // 3. Micro-Fluidity (Are things actually moving?)
-                    // If average particle moved less than 0.01 units in 100 ticks, it's a frozen crystal.
-                    if (avgMovement < 0.01) return "DEAD";
+                    // 2. Macro-Stability — must not swing more than 25% in 200 ticks (was 50%)
+                    if (varianceRatio > 0.25) return "DEAD";
 
-                    // 4. Dimensional Complexity
-                    // At least 2 dimensions must have meaningful variance, so it's not just a 1D line.
-                    if (diverseDims < 2) return "DEAD";
+                    // 3. Micro-Fluidity — must be genuinely dynamic (raised from 0.01)
+                    if (avgMovement < 0.05) return "DEAD";
 
+                    // 4. Dimensional Complexity — at least 3 active dims (was 2)
+                    if (diverseDims < 3) return "DEAD";
+
+                    // Passed phase 1 — now take a new snapshot and wait for phase 2
+                    this.history_variance = avgVariance;
+                    this.history_states = this.entities.map(e => e.states.slice());
+                    return null; // Keep evaluating
+                }
+
+                // Phase 3: Second survival checkpoint at tick 1500 — prove long-term stability
+                if (this.age === 1500) {
+                    let varianceDelta = Math.abs(avgVariance - this.history_variance);
+                    let varianceRatio = this.history_variance > 0 ? (varianceDelta / this.history_variance) : 0;
+
+                    let totalMovement = 0;
+                    for (let i = 0; i < this.entities.length; i++) {
+                        let ent = this.entities[i];
+                        let oldStates = this.history_states[i];
+                        let distSq = 0;
+                        for (let d = 0; d < this.D; d++) {
+                            distSq += Math.pow((ent.states[d] || 0) - (oldStates[d] || 0), 2);
+                        }
+                        totalMovement += Math.sqrt(distSq);
+                    }
+                    let avgMovement = totalMovement / this.entities.length;
+
+                    // --- FINAL VERDICT ---
+                    // Same thresholds — but now over a 700-tick window (600-1500)
+                    if (avgVariance < 0.005 || avgVariance > 100000) return "DEAD";
+                    if (varianceRatio > 0.25) return "DEAD";
+                    if (avgMovement < 0.05) return "DEAD";
+                    if (diverseDims < 3) return "DEAD";
+
+                    // Survived everything. This universe is genuinely alive.
                     this.isStable = true;
                 }
-            } else if (this.age > 500) {
-                // If it wasn't stable by 500, kill it
+            } else if (this.age > 1500) {
+                // If it never passed the final check, kill it
                 if (!this.isStable) return "DEAD";
             }
         }
