@@ -85,7 +85,8 @@ class VoidEngine {
             });
         } else {
             this.D = Math.floor(Math.random() * 50) + 1; // 1 to 50 Potential Dimensions
-            let numRules = Math.floor(Math.random() * 15) + 1; // 1 to 15 AST equations
+            // Start at 3 rules to guarantee mathematical tension. Max 10.
+            let numRules = Math.floor(Math.random() * 8) + 3; // 3 to 10 AST equations
 
             // --- AST CONFIG (BIAS 3 FIX) ---
             this.astConfig = {
@@ -219,9 +220,9 @@ class VoidEngine {
             }
         }
 
-        // 2. God System v0.9 — Unbiased Emergence Filter
-        //    No absolute scale thresholds. Only structural/relational tests.
-        const GOD_SNAPS = [300, 600, 900, 1200, 1500];
+        // 2. God System v1.0 — Hardened Emergence Filter
+        //    10 snapshots over 3000 ticks. No absolute scale thresholds.
+        const GOD_SNAPS = [300, 600, 900, 1200, 1500, 1800, 2100, 2400, 2700, 3000];
 
         if (!this.isStable && GOD_SNAPS.includes(this.age)) {
 
@@ -287,7 +288,7 @@ class VoidEngine {
             if (this.age === 300) this.initialMovement = avgMovement;
 
             // --- FINAL VERDICT at last snapshot ---
-            if (this.age === 1500) {
+            if (this.age === 3000) {
 
                 // TEST 1: Monotonic variance (purely expanding or purely collapsing)
                 // A universe with internal feedback MUST reverse direction at least once.
@@ -323,8 +324,8 @@ class VoidEngine {
                 // TEST 4: Dimensional concentration must be consistent — not just a fluke
                 // Check that effective dims stayed above threshold for majority of snapshots
                 let dimFailCount = this.snapEffDims.filter(ed => ed < minEffDims).length;
-                if (dimFailCount >= 3) {
-                    this.godVerdict = `Persistent Line/Plane (${dimFailCount}/5 snaps collapsed)`;
+                if (dimFailCount >= 5) {
+                    this.godVerdict = `Persistent Line/Plane (${dimFailCount}/10 snaps collapsed)`;
                     return "DEAD";
                 }
 
@@ -351,12 +352,38 @@ class VoidEngine {
                     return "DEAD";
                 }
 
+                // TEST 7: Shannon Entropy of variance trajectory
+                // Quantize variance changes into symbols and measure information content.
+                // A truly complex universe must show diverse, non-repeating dynamics.
+                let symbols = [];
+                for (let i = 1; i < this.snapVariance.length; i++) {
+                    let ratio = this.snapVariance[i] / this.snapVariance[i - 1];
+                    if (ratio > 1.05) symbols.push('U');
+                    else if (ratio < 0.95) symbols.push('D');
+                    else symbols.push('F');
+                }
+                // Count frequency of each symbol
+                let freq = {};
+                for (let s of symbols) freq[s] = (freq[s] || 0) + 1;
+                let entropy = 0;
+                for (let key in freq) {
+                    let p = freq[key] / symbols.length;
+                    if (p > 0) entropy -= p * Math.log2(p);
+                }
+                // With 3 symbols, max entropy = log2(3) ≈ 1.585
+                // Require at least 40% of max entropy (~0.63 bits)
+                if (entropy < 0.63) {
+                    let pattern = symbols.join('');
+                    this.godVerdict = `Low Complexity (H=${entropy.toFixed(3)}, pattern=${pattern})`;
+                    return "DEAD";
+                }
+
                 // --- SURVIVED ALL TESTS ---
-                this.godVerdict = `ALIVE (${latestEffDims.toFixed(1)} eff. dims, CV=${vCV.toFixed(3)})`;
+                this.godVerdict = `ALIVE (${latestEffDims.toFixed(1)} eff. dims, CV=${vCV.toFixed(3)}, H=${entropy.toFixed(2)})`;
                 this.isStable = true;
 
             }
-        } else if (!this.isStable && this.age > 1500) {
+        } else if (!this.isStable && this.age > 3000) {
             return "DEAD";
         }
 
@@ -732,7 +759,7 @@ function animate() {
             let snap = engine.snapVariance ? engine.snapVariance.length : 0;
             let latestV = engine.snapVariance ? engine.snapVariance[snap - 1] : null;
             let latestE = engine.snapEffDims ? engine.snapEffDims[snap - 1] : null;
-            let snapStr = snap > 0 ? ` | snap ${snap}/5 | var=${latestV.toFixed(3)} | eff.dims=${latestE ? latestE.toFixed(1) : '?'}` : '';
+            let snapStr = snap > 0 ? ` | snap ${snap}/10 | var=${latestV.toFixed(3)} | eff.dims=${latestE ? latestE.toFixed(1) : '?'}` : '';
             document.getElementById('status-banner').innerText = `EVALUATING (age ${engine.age}${snapStr})`;
             document.getElementById('status-banner').style.color = "#ff0";
             document.getElementById('status-banner').style.borderColor = "#ff0";
