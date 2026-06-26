@@ -9,7 +9,7 @@ function generateMath(depth, vars, config) {
     // Raw math. No safety nets. The void decides what works.
     const ops = ['+', '-', '*', '/', '%', '**'];
     const funcs = ['Math.sin', 'Math.cos', 'Math.abs', 'Math.tanh', 'Math.sign', 'Math.exp', 'Math.log',
-                   'Math.atan', 'Math.floor', 'Math.ceil', 'Math.round', 'Math.trunc'];
+        'Math.atan', 'Math.floor', 'Math.ceil', 'Math.round', 'Math.trunc'];
     const specialFuncs = ['sqrtabs', 'mod'];
     const binaryFuncs = ['Math.pow', 'Math.min', 'Math.max', 'Math.atan2', 'Math.hypot'];
 
@@ -59,11 +59,11 @@ class VoidEngine {
             this.rules = config.rules.map(r => {
                 let aOp = r.assignA || '=';
                 let bOp = r.assignB || '=';
-                
+
                 let effectFuncCode = "";
                 if (r.effectGroups && r.dimMap) {
                     effectFuncCode = `for(let d=0; d<D; d++) {\n  switch(${JSON.stringify(r.dimMap)}[d]) {\n`;
-                    for(let g=0; g<r.effectGroups.length; g++) {
+                    for (let g = 0; g < r.effectGroups.length; g++) {
                         effectFuncCode += `    case ${g}: { let tA = ${r.effectGroups[g].eAStr}; let tB = ${r.effectGroups[g].eBStr}; a[d]${aOp}tA; b[d]${bOp}tB; break; }\n`;
                     }
                     effectFuncCode += `  }\n}`;
@@ -124,25 +124,25 @@ class VoidEngine {
                 let cmpOps = ['>', '<', '>=', '<='];
                 let cmp = cmpOps[Math.floor(Math.random() * cmpOps.length)];
                 let tStr = `return (${generateMath(this.astConfig.triggerDepth, triggerVars, this.astConfig)}) ${cmp} ${this.triggerThreshold.toFixed(4)};`;
-                
+
                 let assignA = assignOps[Math.floor(Math.random() * assignOps.length)];
                 let assignB = assignOps[Math.floor(Math.random() * assignOps.length)];
 
                 // Bias 1 Fix: Per-dimension group effects
                 let numEffectGroups = Math.floor(Math.random() * Math.min(this.D, 5)) + 1;
                 let effectGroups = [];
-                for(let g=0; g<numEffectGroups; g++) {
+                for (let g = 0; g < numEffectGroups; g++) {
                     effectGroups.push({
                         eAStr: generateMath(this.astConfig.effectDepth, effectVars, this.astConfig),
                         eBStr: generateMath(this.astConfig.effectDepth, effectVars, this.astConfig)
                     });
                 }
-                
+
                 let dimMap = [];
-                for(let d=0; d<this.D; d++) dimMap.push(Math.floor(Math.random() * numEffectGroups));
+                for (let d = 0; d < this.D; d++) dimMap.push(Math.floor(Math.random() * numEffectGroups));
 
                 let effectFuncCode = `for(let d=0; d<D; d++) {\n  switch(${JSON.stringify(dimMap)}[d]) {\n`;
-                for(let g=0; g<numEffectGroups; g++) {
+                for (let g = 0; g < numEffectGroups; g++) {
                     effectFuncCode += `    case ${g}: { let tA = ${effectGroups[g].eAStr}; let tB = ${effectGroups[g].eBStr}; a[d]${assignA}tA; b[d]${assignB}tB; break; }\n`;
                 }
                 effectFuncCode += `  }\n}`;
@@ -205,6 +205,15 @@ class VoidEngine {
             }
 
             if (triggered) {
+                // THE GUILLOTINE: Mathematical necessity, not a designer bias!
+                // WebGL culls geometry if positions are NaN or Infinity, causing the black screen.
+                for (let d = 0; d < this.D; d++) {
+                    if (!isFinite(entA.states[d]) || !isFinite(entB.states[d])) {
+                        this.godVerdict = "Instant Explode (NaN/Infinity)";
+                        return "DEAD";
+                    }
+                }
+
                 this.events.push([entA, entB]);
                 this.totalEvents++;
             }
@@ -266,9 +275,9 @@ class VoidEngine {
             let effectiveDims = herfindahl > 0 ? (1.0 / herfindahl) : this.D;
 
             // --- STORE SNAPSHOT ---
-            if (!this.snapVariance)   this.snapVariance = [];
-            if (!this.snapMovement)   this.snapMovement = [];
-            if (!this.snapEffDims)    this.snapEffDims = [];
+            if (!this.snapVariance) this.snapVariance = [];
+            if (!this.snapMovement) this.snapMovement = [];
+            if (!this.snapEffDims) this.snapEffDims = [];
             this.snapVariance.push(avgVariance);
             this.snapMovement.push(avgMovement);
             this.snapEffDims.push(effectiveDims);
@@ -284,11 +293,11 @@ class VoidEngine {
                 // A universe with internal feedback MUST reverse direction at least once.
                 let allUp = true, allDown = true;
                 for (let i = 1; i < this.snapVariance.length; i++) {
-                    if (this.snapVariance[i] <= this.snapVariance[i-1]) allUp = false;
-                    if (this.snapVariance[i] >= this.snapVariance[i-1]) allDown = false;
+                    if (this.snapVariance[i] <= this.snapVariance[i - 1]) allUp = false;
+                    if (this.snapVariance[i] >= this.snapVariance[i - 1]) allDown = false;
                 }
-                if (allUp)   { this.godVerdict = "Monotonic Expansion";  return "DEAD"; }
-                if (allDown) { this.godVerdict = "Monotonic Collapse";    return "DEAD"; }
+                if (allUp) { this.godVerdict = "Monotonic Expansion"; return "DEAD"; }
+                if (allDown) { this.godVerdict = "Monotonic Collapse"; return "DEAD"; }
 
                 // TEST 2: Frozen — movement has dropped to < 1% of its initial value
                 // This is relative — no absolute scale assumption.
@@ -319,21 +328,34 @@ class VoidEngine {
                     return "DEAD";
                 }
 
-                // TEST 5: Variance must not be trivially uniform (check coefficient of variation)
-                // If variance barely fluctuates across all 5 snapshots, it's a boring attractor
-                let vMean = this.snapVariance.reduce((a,b)=>a+b,0) / this.snapVariance.length;
-                let vStd = Math.sqrt(this.snapVariance.reduce((s,v)=>s+Math.pow(v-vMean,2),0)/this.snapVariance.length);
+                // TEST 5: Strict Dynamic Variance (Kill static noise and slow bleeds)
+                let vMean = this.snapVariance.reduce((a, b) => a + b, 0) / this.snapVariance.length;
+                let vStd = Math.sqrt(this.snapVariance.reduce((s, v) => s + Math.pow(v - vMean, 2), 0) / this.snapVariance.length);
                 let vCV = vMean > 0 ? vStd / vMean : 0;
-                if (vCV < 0.005) {
-                    this.godVerdict = `Boring Attractor (CV=${vCV.toFixed(4)})`;
+
+                // Raised threshold from 0.005 to 0.05. It MUST prove it is dynamic.
+                if (vCV < 0.05) {
+                    this.godVerdict = `Static/Slow Bleed (CV=${vCV.toFixed(4)})`;
+                    return "DEAD";
+                }
+
+                // TEST 6: The Oscillator Trap (Kill perfect 2-frame loops)
+                // If it moves a lot, but its variance is suspiciously identical 
+                // between snapshots, it is just bouncing back and forth.
+                let maxVarDiff = 0;
+                for (let i = 1; i < this.snapVariance.length; i++) {
+                    maxVarDiff = Math.max(maxVarDiff, Math.abs(this.snapVariance[i] - this.snapVariance[i - 1]));
+                }
+                if (maxVarDiff < vMean * 0.01) {
+                    this.godVerdict = "Trivial Oscillator (Perfect Loop)";
                     return "DEAD";
                 }
 
                 // --- SURVIVED ALL TESTS ---
                 this.godVerdict = `ALIVE (${latestEffDims.toFixed(1)} eff. dims, CV=${vCV.toFixed(3)})`;
                 this.isStable = true;
-            }
 
+            }
         } else if (!this.isStable && this.age > 1500) {
             return "DEAD";
         }
@@ -708,8 +730,8 @@ function animate() {
         } else {
             // Show snapshot progress
             let snap = engine.snapVariance ? engine.snapVariance.length : 0;
-            let latestV = engine.snapVariance ? engine.snapVariance[snap-1] : null;
-            let latestE = engine.snapEffDims ? engine.snapEffDims[snap-1] : null;
+            let latestV = engine.snapVariance ? engine.snapVariance[snap - 1] : null;
+            let latestE = engine.snapEffDims ? engine.snapEffDims[snap - 1] : null;
             let snapStr = snap > 0 ? ` | snap ${snap}/5 | var=${latestV.toFixed(3)} | eff.dims=${latestE ? latestE.toFixed(1) : '?'}` : '';
             document.getElementById('status-banner').innerText = `EVALUATING (age ${engine.age}${snapStr})`;
             document.getElementById('status-banner').style.color = "#ff0";
@@ -730,13 +752,13 @@ function animate() {
 
     // UI Updates
     document.getElementById('event-count').innerText = engine.totalEvents;
-    let latestSnap = engine.snapVariance ? engine.snapVariance[engine.snapVariance.length-1] : null;
+    let latestSnap = engine.snapVariance ? engine.snapVariance[engine.snapVariance.length - 1] : null;
     document.getElementById('variance-count').innerText = latestSnap ? latestSnap.toFixed(4) : "Waiting...";
     document.getElementById('void-age').innerText = engine.age;
 
     // Auto-update projection every 60 frames to find best viewing dimensions
     if (engine.age % 60 === 0) updateProjectionDims();
-    
+
     // Update shader uniform for stagnant particle visibility
     const hideStagnant = document.getElementById('hide-stagnant-checkbox').checked;
     particleSystem.material.uniforms.u_hideStagnant.value = hideStagnant ? 1.0 : 0.0;
@@ -771,7 +793,7 @@ function animate() {
             energySq += Math.pow(states[d] || 0, 2);
         }
         let energy = Math.sqrt(energySq);
-        
+
         // Minimum size so they are visible if we uncheck the hide toggle
         sizes[i] = energy > 0.1 ? Math.min(energy, 5.0) : 0.05;
     }
